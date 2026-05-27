@@ -1,0 +1,12 @@
+version: '3.8'
+
+services:
+  agentic-system:
+    build: .
+    container_name: agentic_mcp_framework
+    env_file:
+      - .env
+    volumes:
+      - .:/app
+    environment:
+      - PYTHONUNBUFFERED=1

@@ -10,8 +10,8 @@ The framework is divided into two main components:
 
 ## Development Roadmap
 
-- [x] **Architectural Setup:** Configuration of the Docker environment and the ReAct pattern.
-- [ ] **Toy Example (Echo):** Initial Proof of Concept. Basic communication between the agent and a local MCP server executing a simple "echo" script.
+- [x] **Architectural Setup:** Configuration of the Docker environment and the project architecture.
+- [ ] **Toy Example (Echo):** Basic communication between the agent and a local MCP server executing a simple "echo" script.
 - [ ] **ASM Wrapper:** Development of a dedicated MCP server to wrap the REST APIs of `AsmetaS-web-service`.
 - [ ] **Neuro-symbolic Showcase:** Testing and benchmarking the full interaction between the LLM and the ASM simulator.
 
@@ -23,4 +23,14 @@ The project is fully containerized to ensure isolation and reproducibility.
 ```bash
    git clone [https://github.com/gallizzz/agentic-mcp-framework.git](https://github.com/gallizzz/agentic-mcp-framework.git)
 ```
-2. [TODO]
+2. Configure the environment variables:
+   Create a copy of the file `.env.example` and name it `.env`, apply your Google AI Studio API Key there: 
+```plaintext
+   GEMINI_API_KEY=your_google_ai_studio_api_key_here
+```
+3. Start the project:
+   Build and start the containers, the LangGraph agent will start as the main process, calling and orchestrating the background MCP server.
+```bash
+   docker-compose up --build
+```
+
