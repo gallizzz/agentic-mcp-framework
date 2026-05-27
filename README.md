@@ -8,6 +8,19 @@ The framework is divided into two main components:
 1. **The Agent (LangGraph Client):** Reasons about tasks and decides when and how to invoke external tools.
 2. **The MCP Server (The Tools):** Exposes traditional tools to the agent in a standardized format, acting as a bridge to external systems.
 
+```text
+agentic-mcp-framework/
+├── agent/
+│   └── react_agent.py        
+|── mcp_server/
+│   └── echo_mcp_server.py    
+├── .env.example              
+├── .gitignore
+├── Dockerfile                
+├── docker-compose.yml        
+└── requirements.txt          
+```
+
 ## Development Roadmap
 
 - [x] **Architectural Setup:** Configuration of the Docker environment and the project architecture.
@@ -21,14 +34,16 @@ The project is fully containerized to ensure isolation and reproducibility.
 
 1. Clone the repository:
 ```bash
-   git clone [https://github.com/gallizzz/agentic-mcp-framework.git](https://github.com/gallizzz/agentic-mcp-framework.git)
+   git clone https://github.com/gallizzz/agentic-mcp-framework.git
 ```
 2. Configure the environment variables:
-   Create a copy of the file `.env.example` and name it `.env`, apply your Google AI Studio API Key there: 
+
+   Create a copy of the file `.env.example` and name it `.env`, apply your Google AI Studio API Key (we use Gemini 3.5 flash for its free tier option) there: 
 ```plaintext
    GEMINI_API_KEY=your_google_ai_studio_api_key_here
 ```
 3. Start the project:
+
    Build and start the containers, the LangGraph agent will start as the main process, calling and orchestrating the background MCP server.
 ```bash
    docker-compose up --build
