@@ -24,9 +24,21 @@ agentic-mcp-framework/
 ## Development Roadmap
 
 - [x] **Architectural Setup:** Configuration of the Docker environment and the project architecture.
-- [ ] **Toy Example (Echo):** Basic communication between the agent and a local MCP server executing a simple "echo" script.
+- [x] **Toy Example (Echo):** Basic communication between the agent and a local MCP server executing a simple "echo" script.
 - [ ] **ASM Wrapper:** Development of a dedicated MCP server to wrap the REST APIs of `AsmetaS-web-service`.
 - [ ] **Neuro-symbolic Showcase:** Testing and benchmarking the full interaction between the LLM and the ASM simulator.
+
+## Toy example
+
+The base infrastructure has been successfully validated through a "Toy Example" using an Echo tool. The framework correctly executes the complete ReAct loop:
+
+1. **Thought**: The LLM processes the human message and determines it needs to use an external tool to fulfill the request.
+
+2. **Action**: The agent issues a CallToolRequest targeting the echo_message function via the MCP protocol.
+
+3. **Observation**: The isolated MCP server executes the script and returns the output to the agent's context.
+
+4. **Response**: The agent incorporates the tool's execution result to generate the final output.
 
 ## Quick Start (Docker)
 
