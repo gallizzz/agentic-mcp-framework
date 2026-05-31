@@ -40,6 +40,8 @@ The base infrastructure has been successfully validated through a "Toy Example" 
 
 4. **Response**: The agent incorporates the tool's execution result to generate the final output.
 
+<img width="1256" height="533" alt="immagine" src="https://github.com/user-attachments/assets/fc8381f0-529d-42da-95a6-5befbada9b1f" />
+
 ## Quick Start (Docker)
 
 The project is fully containerized to ensure isolation and reproducibility.
