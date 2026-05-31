@@ -11,7 +11,7 @@ load_dotenv()
 async def main():
     # Initialize the Google Gemini LLM
     llm = ChatGoogleGenerativeAI(
-        model="gemini-2.5-flash", 
+        model="gemini-3.5-flash", 
         temperature=0.0 # Deterministic output
     )
 
