@@ -25,6 +25,7 @@ agentic-mcp-framework/
 
 - [x] **Architectural Setup:** Configuration of the Docker environment and the project architecture.
 - [x] **Toy Example (Echo):** Basic communication between the agent and a local MCP server executing a simple "echo" script.
+- [ ] **Toy Example (Pets):** Communication between the agent and the PetStore API.
 - [ ] **ASM Wrapper:** Development of a dedicated MCP server to wrap the REST APIs of `AsmetaS-web-service`.
 - [ ] **Neuro-symbolic Showcase:** Testing and benchmarking the full interaction between the LLM and the ASM simulator.
 
