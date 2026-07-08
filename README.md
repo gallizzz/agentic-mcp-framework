@@ -8,6 +8,13 @@ The framework is divided into two main components:
 1. **The Agent (LangGraph Client):** Reasons about tasks and decides when and how to invoke external tools.
 2. **The MCP Server (The Tools):** Exposes traditional tools to the agent in a standardized format, acting as a bridge to external systems.
 
+### The ReAct Paradigm
+
+The agent in [react_agent.py](agent/react_agent.py) is implemented using the **ReAct (Reasoning + Acting)** paradigm:
+* **Reasoning:** The LLM (Gemini 3.5 Flash) evaluates the user input to determine if external information or action is needed.
+* **Acting:** The agent executes specific tools provided by the connected MCP Servers (such as checking inventories or adding pets).
+* **Observing:** The outputs of these tools are sent back to the LLM as observations, allowing it to reason again and decide whether to call another tool or return the final answer.
+
 ```text
 agentic-mcp-framework/
 ├── agent/
