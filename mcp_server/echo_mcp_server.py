@@ -6,8 +6,8 @@ mcp = FastMCP("EchoServer")
 def echo_message(message: str) -> str:
     """
     Receives a generated message and echoes it to the standard output.
-    Essential tool for printing the agent's reasoning results.
     """
+    
     print(f"\n[TOOL ECHO] The agent said: {message}\n")
     return f"Message '{message}' processed and emitted successfully."
 

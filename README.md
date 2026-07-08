@@ -12,8 +12,9 @@ The framework is divided into two main components:
 agentic-mcp-framework/
 ├── agent/
 │   └── react_agent.py        
-|── mcp_server/
-│   └── echo_mcp_server.py    
+├── mcp_server/
+│   ├── echo_mcp_server.py    
+│   └── petstore_mcp_server.py
 ├── .env.example              
 ├── .gitignore
 ├── Dockerfile                
@@ -25,41 +26,48 @@ agentic-mcp-framework/
 
 - [x] **Architectural Setup:** Configuration of the Docker environment and the project architecture.
 - [x] **Toy Example (Echo):** Basic communication between the agent and a local MCP server executing a simple "echo" script.
+- [x] **Petstore API Wrapper:** Development of a dedicated MCP server wrapping the REST APIs of `petstore.swagger.io`.
+- [x] **Interactive CLI:** Interactive console agent supporting dynamic user requests with clean formatting.
 - [ ] **ASM Wrapper:** Development of a dedicated MCP server to wrap the REST APIs of `AsmetaS-web-service`.
 - [ ] **Neuro-symbolic Showcase:** Testing and benchmarking the full interaction between the LLM and the ASM simulator.
 
-## Toy example
+## Integrations
 
-The base infrastructure has been successfully validated through a "Toy Example" using an Echo tool. The framework correctly executes the complete ReAct loop:
+### 1. Echo MCP Server
+A simple local server to test the base configuration. Exposes a single tool (`echo_message`) that prints the agent's message back to the stdout.
 
-1. **Thought**: The LLM processes the human message and determines it needs to use an external tool to fulfill the request.
+### 2. Swagger Petstore MCP Server
+A complete REST API wrapper for `petstore.swagger.io` written with **FastMCP** and `requests`. It exposes the following tools:
+*   `get_store_inventory`: Get status-based pet inventory counts.
+*   `find_pets_by_status`: Find pets matching status (`available`, `pending`, `sold`).
+*   `get_pet_by_id`: Fetch pet details by numeric ID.
+*   `add_pet`: Add a new pet to the database.
+*   `delete_pet`: Delete a pet by its numeric ID.
 
-2. **Action**: The agent issues a CallToolRequest targeting the echo_message function via the MCP protocol.
-
-3. **Observation**: The isolated MCP server executes the script and returns the output to the agent's context.
-
-4. **Response**: The agent incorporates the tool's execution result to generate the final output.
-
-<img width="1855" height="529" alt="immagine" src="https://github.com/user-attachments/assets/4a1a19f0-ddf3-40ca-8a76-02f6ac4b2aaa" />
+---
 
 ## Quick Start (Docker)
 
 The project is fully containerized to ensure isolation and reproducibility.
 
-1. Clone the repository:
-```bash
-   git clone https://github.com/gallizzz/agentic-mcp-framework.git
-```
-2. Configure the environment variables:
-
-   Create a copy of the file `.env.example` and name it `.env`, apply your Google AI Studio API Key (we use Gemini 3.5 flash for its free tier option) there: 
+### 1. Configure the environment variables
+Create a copy of the `.env.example` file and name it `.env`, then add your Google AI Studio API Key:
 ```plaintext
-   GEMINI_API_KEY=your_google_ai_studio_api_key_here
+GEMINI_API_KEY=your_google_ai_studio_api_key_here
 ```
-3. Start the project:
 
-   Build and start the containers, the LangGraph agent will start as the main process, calling and orchestrating the background MCP server.
+### 2. Start the interactive agent
+Build and start the agent in interactive CLI mode using Docker Compose:
 ```bash
-   docker-compose up --build
+docker-compose run --rm agentic-system
 ```
+*(Using `run` instead of `up` connects your terminal's stdin/stdout to the container so you can chat with the agent in real-time).*
+
+### 3. Example Queries
+Try typing some requests when the agent is ready:
+*   `What is the current inventory in the pet store?`
+*   `Find all sold pets in the store.`
+*   `Add a new pet named "Rocky" with status "available".`
+*   `Echo the message "Hello, MCP!"` (calls the Echo server).
+
 
