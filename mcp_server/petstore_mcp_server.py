@@ -1,7 +1,7 @@
 import requests
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
-mcp = FastMCP("PetstoreServer")
+mcp = MCPServer("PetstoreServer")
 
 PETSTORE_BASE_URL = "https://petstore.swagger.io/v2"
 

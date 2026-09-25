@@ -1,6 +1,6 @@
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
-mcp = FastMCP("EchoServer")
+mcp = MCPServer("EchoServer")
 
 @mcp.tool()
 def echo_message(message: str) -> str:

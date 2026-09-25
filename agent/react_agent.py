@@ -54,7 +54,7 @@ def print_clean_message(message):
 async def main():
     # Initialize the Google Gemini LLM
     llm = ChatGoogleGenerativeAI(
-        model="gemini-3.5-flash", 
+        model="gemini-3.8-flash", 
         temperature=0.0 # Deterministic output
     )
 
