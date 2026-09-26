@@ -1,7 +1,15 @@
+import logging
 import os
 import json
 import httpx
-from mcp.server.mcpserver import MCPServer
+
+# Suppress internal MCP server request info logs
+logging.getLogger("mcp").setLevel(logging.WARNING)
+
+try:
+    from mcp.server.mcpserver import MCPServer
+except ModuleNotFoundError:
+    from mcp.server.fastmcp import FastMCP as MCPServer
 
 mcp = MCPServer("asmetas-formal-guard")
 
@@ -66,23 +74,32 @@ async def sanitise_action(monitored_variables: dict) -> str:
         }, indent=2)
 
     url = f"{ASMETAS_URL}/step"
+
+    # 1. Garantisce che tutti i valori siano stringhe (Map<String, String> in Spring Boot)
+    clean_monitored = {str(k): str(v) for k, v in monitored_variables.items()}
+
+    # 2. Invia id come intero nativo
     payload = {
-        "id": current_execution_id,
-        "monitoredVariables": monitored_variables
+        "id": int(current_execution_id),
+        "monitoredVariables": clean_monitored
     }
 
     async with httpx.AsyncClient(timeout=10.0) as client:
         try:
-            response = await client.put(url, json=payload)
+            response = await client.put(
+                url, 
+                json=payload,
+                headers={"Content-Type": "application/json"}
+            )
             response.raise_for_status()
             data = response.json()
 
-            # Extract outAction from response structure
+            # Estrazione outAction dalla struttura di risposta
             run_output = data.get("runOutput", {})
             out_values = run_output.get("outvalues", {})
             out_action = out_values.get("outAction")
 
-            input_action = monitored_variables.get("inputAction")
+            input_action = clean_monitored.get("inputAction")
 
             if out_action == input_action:
                 verdict = "APPROVED"
@@ -102,12 +119,16 @@ async def sanitise_action(monitored_variables: dict) -> str:
                 "raw_output": out_values
             }, indent=2)
 
+        except httpx.HTTPStatusError as e:
+            return json.dumps({
+                "status": "error",
+                "message": f"HTTP {e.response.status_code}: {e.response.text}"
+            }, indent=2)
         except httpx.HTTPError as e:
             return json.dumps({
                 "status": "error",
                 "message": f"Failed to execute step in AsmetaS enforcer: {str(e)}"
             }, indent=2)
-
 
 @mcp.tool()
 async def stop_enforcer() -> str:

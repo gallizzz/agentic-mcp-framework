@@ -1,5 +1,13 @@
+import logging
 import requests
-from mcp.server.mcpserver import MCPServer
+
+# Suppress internal MCP server request info logs
+logging.getLogger("mcp").setLevel(logging.WARNING)
+
+try:
+    from mcp.server.mcpserver import MCPServer
+except ModuleNotFoundError:
+    from mcp.server.fastmcp import FastMCP as MCPServer
 
 mcp = MCPServer("PetstoreServer")
 

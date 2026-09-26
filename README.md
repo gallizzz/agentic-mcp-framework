@@ -55,7 +55,7 @@ Il server MCP comunica via HTTP con il servizio web di AsmetaS (`foselab/AsmetaS
 Per collaudare i tool MCP prima dell'integrazione con i nodi LangGraph:
 1. Eseguire l'MCP Inspector tramite `npx`:
    ```bash
-   npx @modelcontextprotocol/inspector python mcp_server/asmetas/asmetas_mcp_server.py
+   npx @modelcontextprotocol/inspector python3 mcp_server/asmetas/asmetas_mcp_server.py
    ```
    *(Nota: se si utilizza un virtualenv locale, specificare il path dell'interprete: `npx @modelcontextprotocol/inspector .venv/bin/python mcp_server/asmetas/asmetas_mcp_server.py`)*.
 
