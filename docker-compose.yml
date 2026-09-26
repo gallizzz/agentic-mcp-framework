@@ -1,6 +1,7 @@
 services:
   agentic-system:
     build: .
+    network_mode: "host"
     container_name: agentic_mcp_framework
     env_file:
       - .env

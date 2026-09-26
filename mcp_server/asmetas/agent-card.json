@@ -1,0 +1,85 @@
+{
+  "name": "AsmetaSEnforcerGuard",
+  "description": "Formal Guard Enforcer wrapping the AsmetaS execution runtime for runtime verification and action sanitisation.",
+  "type": "deterministic",
+  "protocol": "mcp",
+  "transport": "stdio",
+  "entrypoint": "python mcp_server/asmetas/asmetas_mcp_server.py",
+  "skills": [
+    {
+      "name": "start_enforcer",
+      "description": "Initialises an AsmetaS formal guard execution session for a given ASM specification.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "asm_name": {
+            "type": "string",
+            "description": "The name of the ASM model file to start."
+          }
+        },
+        "required": [
+          "asm_name"
+        ]
+      }
+    },
+    {
+      "name": "sanitise_action",
+      "description": "Evaluates monitored variables and proposed input action against ASM formal rules, returning an APPROVED or VIOLATION verdict along with a sanitised action.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "monitored_variables": {
+            "type": "object",
+            "description": "Dictionary containing inputAction and environment state variables.",
+            "properties": {
+              "inputAction": {
+                "type": "string",
+                "description": "The proposed action to be evaluated."
+              }
+            },
+            "required": [
+              "inputAction"
+            ]
+          }
+        },
+        "required": [
+          "monitored_variables"
+        ]
+      },
+      "returns": {
+        "type": "object",
+        "properties": {
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "APPROVED",
+              "VIOLATION"
+            ]
+          },
+          "input_action": {
+            "type": "string"
+          },
+          "sanitised_action": {
+            "type": "string"
+          },
+          "feedback": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "verdict",
+          "sanitised_action",
+          "feedback"
+        ]
+      }
+    },
+    {
+      "name": "stop_enforcer",
+      "description": "Stops the current active AsmetaS enforcer instance and clears state.",
+      "parameters": {
+        "type": "object",
+        "properties": {}
+      }
+    }
+  ]
+}
