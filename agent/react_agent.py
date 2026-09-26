@@ -70,7 +70,7 @@ def print_clean_message(message):
         console.print(f"[{time.strftime('%X')}] 📥 [Tool Output] {truncated}", style="dim")
 
 async def main():
-    # Inizializzazione LLM con trasporto REST e timeout esplicito
+    # Initialize the LLM with the Google Gemini model
     llm = ChatGoogleGenerativeAI(
         model="gemini-3.8-flash",
         request_timeout=30.0,

@@ -75,10 +75,10 @@ async def sanitise_action(monitored_variables: dict) -> str:
 
     url = f"{ASMETAS_URL}/step"
 
-    # 1. Garantisce che tutti i valori siano stringhe (Map<String, String> in Spring Boot)
+    # Convert all monitored variable values to strings for JSON serialization
     clean_monitored = {str(k): str(v) for k, v in monitored_variables.items()}
 
-    # 2. Invia id come intero nativo
+    # Prepare payload with execution ID and monitored variables
     payload = {
         "id": int(current_execution_id),
         "monitoredVariables": clean_monitored
@@ -94,7 +94,7 @@ async def sanitise_action(monitored_variables: dict) -> str:
             response.raise_for_status()
             data = response.json()
 
-            # Estrazione outAction dalla struttura di risposta
+            # Extract the output action and compare with input action
             run_output = data.get("runOutput", {})
             out_values = run_output.get("outvalues", {})
             out_action = out_values.get("outAction")
