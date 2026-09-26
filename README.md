@@ -36,62 +36,7 @@ Il server MCP `mcp_server/asmetas/asmetas_mcp_server.py` incapsula il simulatore
 
 ### Guida Passo-Passo all'Avvio e Collaudo
 
-#### Passaggio 1: Installazione delle Dipendenze
-Assicurarsi che l'ambiente virtuale sia attivo e installare i pacchetti necessari:
-```bash
-pip install -r requirements.txt
-```
-
-#### Passaggio 2: Avvio di AsmetaS Web Service
-Il server MCP comunica via HTTP con il servizio web di AsmetaS (`foselab/AsmetaS-web-service`).
-1. Avviare il container/servizio web AsmetaS verificando che sia in esecuzione sulla porta `8080`.
-2. Verificare l'accessibilità dell'endpoint:
-   ```bash
-   curl -s http://localhost:8080/running-models
-   ```
-   *(Opzionale: se AsmetaS è in esecuzione su un'altra porta o URL, impostare la variabile d'ambiente `export ASMETAS_URL=http://localhost:8080`).*
-
-#### Passaggio 3: Testing Interattivo con MCP Inspector
-Per collaudare i tool MCP prima dell'integrazione con i nodi LangGraph:
-1. Eseguire l'MCP Inspector tramite `npx`:
-   ```bash
-   npx @modelcontextprotocol/inspector python3 mcp_server/asmetas/asmetas_mcp_server.py
-   ```
-   *(Nota: se si utilizza un virtualenv locale, specificare il path dell'interprete: `npx @modelcontextprotocol/inspector .venv/bin/python mcp_server/asmetas/asmetas_mcp_server.py`)*.
-
-2. **Flusso di Test raccomandato nell'Inspector**:
-   - **Tool 1: `start_enforcer`**
-     - Argomenti: `{"asm_name": "SafetyEnforcerModel.asm"}`
-     - *Verifica*: Conferma dell'avvio e restituzione dell'`execution_id` di sessione.
-   - **Tool 2: `sanitise_action` (Verdetto APPROVED)**
-     - Argomenti: `{"monitored_variables": {"inputAction": "IDLE", "rightLaneFree": "true"}}`
-     - *Verifica*: Verdetto `APPROVED` e azione inalterata (`IDLE`).
-   - **Tool 3: `sanitise_action` (Verdetto VIOLATION)**
-     - Argomenti: `{"monitored_variables": {"inputAction": "FASTER", "rightLaneFree": "false"}}`
-     - *Verifica*: Verdetto `VIOLATION` con azione sanitizzata dal guard formale e relativo feedback informativo.
-   - **Tool 4: `stop_enforcer`**
-     - Argomenti: `{}`
-     - *Verifica*: Chiusura corretta della sessione AsmetaS.
-
----
-
-### Configurazione Stdio Client per LangGraph / MCP Client
-Per registrare il server `asmetas-formal-guard` in un client MCP (es. `MultiServerMCPClient` di LangChain/LangGraph):
-
-```json
-{
-  "mcpServers": {
-    "asmetas-formal-guard": {
-      "command": "python",
-      "args": ["mcp_server/asmetas/asmetas_mcp_server.py"],
-      "env": {
-        "ASMETAS_URL": "http://localhost:8080"
-      }
-    }
-  }
-}
-```
-
+Trovi la guida per il testing del servizio MCP a questo [link](https://github.com/gallizzz/agentic-mcp-framework/wiki/Setup-e-Validazione-End%E2%80%90to%E2%80%90End-di-AsmetaS-Runtime-&-Server-MCP)
 ---
 
 ### Contratto Agent-to-Agent (A2A)
