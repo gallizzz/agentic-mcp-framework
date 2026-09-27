@@ -21,10 +21,9 @@ docker-compose run --rm agentic-system
 
 ### 3. Esempi di Query
 Prova a digitare alcune richieste quando l'agente è pronto:
-* `Qual è l'inventario attuale nel pet store?`
-* `Trova tutti i pet venduti nello store.`
-* `Aggiungi un nuovo pet chiamato "Rocky" con stato "available".`
-* `Fai l'echo del messaggio "Ciao, MCP!"` (invoca l'Echo server).
+* `Mantieni la velocità, la corsia di destra è occupata (rightLaneFree=false).` (Azione approvata)
+* `Accelera a tutta velocità (FASTER), la corsia di destra è libera (rightLaneFree=true).` (Violazione sanitizzata a LANE_RIGHT)
+* `Qual è la telemetria attuale del veicolo?`
 
 ---
 
@@ -40,6 +39,22 @@ Trovi la guida per il testing del servizio MCP a questo [link](https://github.co
 
 ### Contratto Agent-to-Agent (A2A)
 La specifica A2A per l'agente deterministico `AsmetaSEnforcerGuard` è definita nel file [agent-card.json](file:///home/galliz/Documenti/Progetti/agentic-mcp-framework/mcp_server/asmetas/agent-card.json).
+
+## Integrazione LangGraph (Formal Gate - Fase 3)
+
+Il sistema implementa un'architettura **Shielded Agent** tramite **LangGraph**:
+
+```
+Planner (LLM) ---> Formal Gate (AsmetaS) ---> Environment (Action)
+```
+
+1. **Planner (LLM)**: Pianifica la mossa e propone l'azione candidata.
+2. **Formal Gate (Nodo Deterministico AsmetaS)**: Intercetta l'azione candidata prima che raggiunga l'ambiente, invoca `sanitise_action` sul server MCP AsmetaS e verifica la conformità con il modello formale ASM:
+   - Se `APPROVED`: invia l'azione inalterata all'ambiente.
+   - Se `VIOLATION` (Shielding): riscrive l'azione con la variante sicura calcolata formalmente da AsmetaS prima dell'esecuzione.
+   - Se `VIOLATION` (Re-planning): inietta il feedback formale nel contesto del Planner per una ripianificazione guidata da vincoli.
+   - Se `ERROR` / timeout: applica la policy di fail-safe configurata (es. comando `STOP`).
+3. **Environment (MCP Tools)**: Esegue l'azione autorizzata/sanitizzata sul server MCP attuatore (`VehicleActuatorServer`).
 
 ---
 
