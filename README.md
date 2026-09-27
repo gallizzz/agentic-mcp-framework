@@ -33,7 +33,7 @@ Prova a digitare alcune richieste quando l'agente è pronto:
 Il server MCP `mcp_server/asmetas/asmetas_mcp_server.py` incapsula il simulatore runtime `AsmetaS@run.time` (`foselab/AsmetaS-web-service`) per la verifica formale a runtime e la sanitizzazione delle azioni degli agenti.
 
 
-### Guida Passo-Passo all'Avvio e Collaudo
+### Guida all'Avvio e Collaudo
 
 Trovi la guida per il testing del servizio MCP a questo [link](https://github.com/gallizzz/agentic-mcp-framework/wiki/Setup-e-Validazione-End%E2%80%90to%E2%80%90End-di-AsmetaS-Runtime-&-Server-MCP)
 
