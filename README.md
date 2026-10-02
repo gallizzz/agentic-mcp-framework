@@ -74,9 +74,11 @@ flowchart TD
 ```text
 agentic-mcp-framework/
 ├── agent/                         # Core agentico (LangGraph)
-│   ├── formal_gate_state.py       # Definizione dello stato dell'agente (FormalAgentState)
-│   ├── formal_gate_node.py        # Nodo formale deterministico (FormalGateNode)
-│   └── formal_gate_graph.py       # Grafo LangGraph, client MCP e runner CLI
+│   ├── agent_state.py             # Definizione dello stato globale dell'agente (AgentState)
+│   ├── planner_node.py            # Nodo 1: Planner LLM e router di conversazione
+│   ├── formal_gate_node.py        # Nodo 2: Guardiano deterministico AsmetaS (FormalGateNode)
+│   ├── environment_node.py        # Nodo 3: Esecutore dell'ambiente e audit log (EnvironmentNode)
+│   └── agent_graph.py             # Grafo LangGraph dell'agente, client MCP e runner CLI
 ├── mcp_server/                    # Server Model Context Protocol (FastMCP)
 │   ├── vehicle_mcp_server.py      # Server attuatore dell'ambiente (VehicleActuatorServer)
 │   └── asmetas/
@@ -91,9 +93,11 @@ agentic-mcp-framework/
 ### Dettaglio dei Moduli
 
 #### Core Agente (`agent/`)
-* **`agent/formal_gate_state.py`**: Struttura `FormalAgentState` (TypedDict LangGraph) che tiene traccia della cronologia dei messaggi, azione candidata, variabili monitorate, verdetto formale, azione sanitizzata, tentativi di retry e storico degli audit.
+* **`agent/agent_state.py`**: Struttura `AgentState` (TypedDict LangGraph) che tiene traccia della cronologia dei messaggi, azione candidata, variabili monitorate, verdetto formale, azione sanitizzata, tentativi di retry e storico degli audit.
+* **`agent/planner_node.py`**: Classe `PlannerNode`, funzione factory `create_planner_node` e `planner_router`: gestisce il prompt di sistema, l'invocazione del modello LLM e l'indirizzamento delle tool call al Formal Gate.
 * **`agent/formal_gate_node.py`**: Classe `FormalGateNode`, implementa la logica di intercettazione delle chiamate ai tool, invocazione del server AsmetaS e applicazione delle policy (`shielding`, `replan`, `fail_safe`, `fail_stop`).
-* **`agent/formal_gate_graph.py`**: Costruisce la topologia `StateGraph`, collega i server MCP via `MultiServerMCPClient` (trasporto `stdio`), definisce i router condizionali ed espone l'interfaccia interattiva CLI con output formattato via `Rich`.
+* **`agent/environment_node.py`**: Classe `EnvironmentNode` e funzione factory `create_environment_node`: esegue le tool call validate/sanitizzate nell'ambiente del veicolo e aggiorna l'audit trail (`action_history`).
+* **`agent/agent_graph.py`**: Costruisce la topologia `StateGraph`, collega i server MCP via `MultiServerMCPClient` (trasporto `stdio`), definisce i router condizionali ed espone l'interfaccia interattiva CLI con output formattato via `Rich`.
 
 #### Server MCP (`mcp_server/`)
 * **`mcp_server/vehicle_mcp_server.py`**: Espone i tool dell'ambiente di guida simulato:

@@ -1,5 +1,5 @@
 """
-State definition for the Formal Gate LangGraph Agent.
+State definition for the Shielded LangGraph Agent.
 """
 from typing import Annotated, Any, Dict, List, Literal, Optional
 from typing_extensions import TypedDict
@@ -7,7 +7,7 @@ from langchain_core.messages import AnyMessage
 from langgraph.graph.message import add_messages
 
 
-class FormalAgentState(TypedDict):
+class AgentState(TypedDict):
     """
     LangGraph state tracking the lifecycle of agent reasoning,
     formal action interception, sanitisation, and environment execution.
@@ -43,3 +43,8 @@ class FormalAgentState(TypedDict):
 
     # Audit history of actions and formal gate interventions
     action_history: List[Dict[str, Any]]
+
+
+# Backward compatibility alias
+FormalAgentState = AgentState
+

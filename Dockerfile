@@ -12,5 +12,5 @@ RUN pip install --no-cache-dir --upgrade pip && \
 
 COPY . .
 
-# Executes the LangGraph Formal Gate agent
-CMD ["python", "agent/formal_gate_graph.py"]
+# Executes the Shielded LangGraph agent
+CMD ["python", "agent/agent_graph.py"]

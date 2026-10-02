@@ -7,7 +7,7 @@ import json
 import logging
 from typing import Any, Callable, Dict, Literal, Optional
 from langchain_core.messages import ToolMessage
-from agent.formal_gate_state import FormalAgentState
+from agent.agent_state import AgentState
 
 logger = logging.getLogger("formal_gate")
 
@@ -42,7 +42,7 @@ class FormalGateNode:
         self.default_safe_action = default_safe_action
         self.monitored_tools = monitored_tools
 
-    async def __call__(self, state: FormalAgentState) -> Dict[str, Any]:
+    async def __call__(self, state: AgentState) -> Dict[str, Any]:
         """
         Node execution function compatible with LangGraph.
         """

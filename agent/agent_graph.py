@@ -13,13 +13,14 @@ from langchain_core.tools import BaseTool
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from langgraph.graph import END, START, StateGraph
-from langgraph.prebuilt import ToolNode
 from rich.console import Console
 from rich.markdown import Markdown
 from rich.panel import Panel
 
+from agent.agent_state import AgentState
+from agent.environment_node import EnvironmentNode, create_environment_node
 from agent.formal_gate_node import FormalGateNode
-from agent.formal_gate_state import FormalAgentState
+from agent.planner_node import PlannerNode, create_planner_node, planner_router
 
 # Load environment
 load_dotenv()
@@ -30,44 +31,11 @@ if hasattr(time, "tzset"):
 console = Console()
 
 
-def create_planner_node(llm, tools: List[BaseTool], system_prompt: Optional[str] = None):
-    """
-    Creates the Planner LLM node with bound environment tools.
-    """
-    llm_with_tools = llm.bind_tools(tools) if tools else llm
-
-    async def planner_node(state: FormalAgentState) -> Dict[str, Any]:
-        messages = list(state.get("messages", []))
-        # Prepend system prompt if provided and not already present
-        if system_prompt and (not messages or not isinstance(messages[0], SystemMessage)):
-            messages = [SystemMessage(content=system_prompt)] + messages
-
-        response = await llm_with_tools.ainvoke(messages)
-        return {"messages": [response]}
-
-    return planner_node
-
-
-def planner_router(state: FormalAgentState) -> str:
-    """
-    Inspects planner output. If a tool call was proposed, route to Formal Gate.
-    Otherwise, conversation is complete -> route to END.
-    """
-    messages = state.get("messages", [])
-    if not messages:
-        return END
-
-    last_message = messages[-1]
-    if hasattr(last_message, "tool_calls") and last_message.tool_calls:
-        return "formal_gate"
-    return END
-
-
 def create_gate_router(policy: str, max_retries: int = 3):
     """
     Routes after Formal Gate evaluation.
     """
-    def gate_router(state: FormalAgentState) -> str:
+    def gate_router(state: AgentState) -> str:
         verdict = state.get("guard_verdict")
 
         if verdict == "APPROVED" or (verdict == "VIOLATION" and policy == "shielding"):
@@ -109,10 +77,10 @@ def build_formal_gate_graph(
         policy=policy,
         error_policy=error_policy,
     )
-    environment = ToolNode(environment_tools) if environment_tools else None
+    environment = create_environment_node(environment_tools) if environment_tools else None
 
     # 2. Build StateGraph
-    builder = StateGraph(FormalAgentState)
+    builder = StateGraph(AgentState)
     builder.add_node("planner", planner)
     builder.add_node("formal_gate", formal_gate)
     if environment:
