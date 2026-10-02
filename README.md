@@ -2,16 +2,18 @@
 
 Implementazione di un'architettura che integra l'orchestrazione a grafi (**LangGraph**) con il **Model Context Protocol (MCP)** e la verifica formale deterministica a runtime (**AsmetaS**, basato su Abstract State Machines).
 
-Il sistema realizza un'architettura in cui un modello di linguaggio (Planner) propone azioni che vengono intercettate, verificate ed eventualmente sanitizzate o bloccate da un guardiano formale prima di essere attuate nell'ambiente operativo.
+Il sistema applica un'architettura in cui l'operatore interagisce via chat con il modello di linguaggio (Planner), le cui azioni proposte verso l'ambiente vengono intercettate, verificate ed eventualmente sanitizzate o bloccate da un guardiano formale prima dell'effettiva attuazione.
 
 ---
 
 ## Architettura del Sistema
 
-Il flusso decisionale ed esecutivo è orchestrato come uno **`StateGraph` LangGraph composto da 3 nodi principali**, che interagiscono con **2 server MCP esterni** disaccoppiati:
+Il flusso decisionale ed esecutivo è orchestrato come uno **`StateGraph` LangGraph composto da 3 nodi principali**, guidato dall'interazione dell'utente e collegato a **2 server MCP esterni** disaccoppiati:
 
 ```mermaid
 flowchart TD
+    Human["👤 Human-in-the-Loop (Operatore via Chat)"]
+
     subgraph LangGraph["Grafo LangGraph (3 Nodi)"]
         Planner["1. planner (LLM Gemini)"]
         FormalGate["2. formal_gate (FormalGateNode)"]
@@ -28,6 +30,9 @@ flowchart TD
         Vehicle["vehicle_server (VehicleActuatorServer)"]
     end
 
+    Human -->|"Prompt / Richiesta di guida"| Planner
+    Planner -->|"Risposta Finale / Feedback"| Human
+
     FormalGate <-->|"sanitise_action"| AsmetaS
     EnvironmentNode <-->|"execute_vehicle_action / get_telemetry"| Vehicle
 ```
@@ -35,7 +40,7 @@ flowchart TD
 ### I 3 Nodi del Grafo LangGraph
 
 1. **`planner` (Nodo LLM)**:
-   - Riceve la richiesta dell'utente e il contesto della conversazione.
+   - Riceve le richieste e i comandi dell'operatore umano (**Human-in-the-Loop**) via chat e mantiene il contesto della conversazione.
    - Ragiona sulla strategia e propone un'azione candidata formulandola come chiamata a tool (es. `execute_vehicle_action(action="FASTER")`).
    - Dopo l'esecuzione nell'ambiente, riceve i risultati per sintetizzare la risposta finale all'utente.
 
