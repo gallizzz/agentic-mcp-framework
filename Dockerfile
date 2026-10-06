@@ -4,6 +4,7 @@ WORKDIR /app
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH=/app
 
 COPY requirements.txt .
 
@@ -12,5 +13,5 @@ RUN pip install --no-cache-dir --upgrade pip && \
 
 COPY . .
 
-# Executes the LangGraph agent
-CMD ["python", "agent/react_agent.py"]
+# Executes the Shielded LangGraph agent
+CMD ["python", "agent/agent_graph.py"]

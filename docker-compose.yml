@@ -9,5 +9,6 @@ services:
       - .:/app
     environment:
       - PYTHONUNBUFFERED=1
+      - PYTHONPATH=/app
     stdin_open: true
     tty: true
