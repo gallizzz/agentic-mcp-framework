@@ -1,0 +1,42 @@
+{
+  "name": "VehicleActuatorEnvironment",
+  "description": "Environment actuator and sensor MCP server for vehicle driving simulation.",
+  "type": "environment",
+  "protocol": "mcp",
+  "transport": "stdio",
+  "entrypoint": "python mcp_server/vehicle/vehicle_mcp_server.py",
+  "skills": [
+    {
+      "name": "execute_vehicle_action",
+      "description": "Executes a driving control action on the vehicle actuator in the environment.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "description": "The command to execute (e.g. 'FASTER', 'SLOWER', 'KEEP', 'IDLE', 'CHANGE_LANE', 'LANE_RIGHT', 'LANE_LEFT', 'STOP')."
+          },
+          "speed_delta": {
+            "type": "integer",
+            "description": "Amount of speed change in km/h (optional, default 20 km/h)."
+          },
+          "right_lane_free": {
+            "type": "boolean",
+            "description": "Sensor reading indicating whether the right lane is free."
+          }
+        },
+        "required": [
+          "action"
+        ]
+      }
+    },
+    {
+      "name": "get_vehicle_telemetry",
+      "description": "Returns the current vehicle telemetry and sensory status.",
+      "parameters": {
+        "type": "object",
+        "properties": {}
+      }
+    }
+  ]
+}

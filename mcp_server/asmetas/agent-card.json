@@ -7,6 +7,62 @@
   "entrypoint": "python mcp_server/asmetas/asmetas_mcp_server.py",
   "skills": [
     {
+      "name": "list_models",
+      "description": "Retrieves the list of available ASM models and libraries loaded on the AsmetaS server.",
+      "parameters": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "upload_model",
+      "description": "Uploads an ASM model file to the AsmetaS runtime server and ensures required standard libraries are uploaded.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "model_path": {
+            "type": "string",
+            "description": "Local path to the .asm model file to upload."
+          }
+        },
+        "required": [
+          "model_path"
+        ]
+      }
+    },
+    {
+      "name": "upload_library",
+      "description": "Uploads an ASM library file (e.g. StandardLibrary.asm) to the AsmetaS runtime server.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "library_path": {
+            "type": "string",
+            "description": "Local path to the .asm library file to upload."
+          }
+        },
+        "required": [
+          "library_path"
+        ]
+      }
+    },
+    {
+      "name": "delete_model",
+      "description": "Deletes an ASM model from the AsmetaS runtime server.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "asm_name": {
+            "type": "string",
+            "description": "Name of the ASM model to delete."
+          }
+        },
+        "required": [
+          "asm_name"
+        ]
+      }
+    },
+    {
       "name": "start_enforcer",
       "description": "Initialises an AsmetaS formal guard execution session for a given ASM specification.",
       "parameters": {

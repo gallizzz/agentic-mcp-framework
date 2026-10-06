@@ -5,8 +5,13 @@ and enforces runtime formal verification and action sanitisation.
 """
 import json
 import logging
+import os
+from pathlib import Path
+import re
 from typing import Any, Callable, Dict, Literal, Optional
 from langchain_core.messages import ToolMessage
+from pydantic import ValidationError
+from agent.agent_card import AgentCard, SanitiseContractResult
 from agent.agent_state import AgentState
 
 logger = logging.getLogger("formal_gate")
@@ -16,6 +21,7 @@ class FormalGateNode:
     """
     Deterministic gate that intercepts candidate actions, evaluates them
     against AsmetaS formal ASM specifications, and applies shielding or feedback.
+    Enforces A2A contracts based on AgentCard specifications.
     """
 
     def __init__(
@@ -25,6 +31,9 @@ class FormalGateNode:
         error_policy: Literal["fail_stop", "fail_safe"] = "fail_stop",
         default_safe_action: str = "STOP",
         monitored_tools: Optional[list[str]] = None,
+        agent_card: Optional[AgentCard] = None,
+        action_mapping: Optional[Dict[str, str]] = None,
+        default_monitored_vars: Optional[Dict[str, str]] = None,
     ):
         """
         Args:
@@ -35,12 +44,42 @@ class FormalGateNode:
             default_safe_action: Fallback action when fail_safe is active.
             monitored_tools: List of tool names to intercept. If None, intercepts any action with 'inputAction'
                              or all tool calls.
+            agent_card: Optional AgentCard contract specification for runtime schema validation.
+            action_mapping: Optional mapping between environment action names and formal model actions (e.g. {'KEEP': 'IDLE'}).
+            default_monitored_vars: Optional default values for formal model monitored variables.
         """
         self.sanitise_action_callable = sanitise_action_callable
         self.policy = policy
         self.error_policy = error_policy
         self.default_safe_action = default_safe_action
         self.monitored_tools = monitored_tools
+        self.agent_card = agent_card
+        self.action_mapping = dict(action_mapping or {})
+        self.default_monitored_vars = dict(default_monitored_vars or {})
+
+    def _is_actuator_action(self, tool_name: str, tool_args: dict) -> tuple[bool, str]:
+        """
+        Determines whether a tool invocation is an actuator action that must be guarded,
+        or a perception/read-only query that can bypass the formal gate.
+        """
+        if self.monitored_tools is not None:
+            if tool_name in self.monitored_tools:
+                return True, ""
+            return False, f"Tool '{tool_name}' is not in monitored tools list."
+
+        # Read-only query / sensor naming patterns
+        read_prefixes = ("get_", "read_", "list_", "query_", "fetch_", "status_", "show_", "check_", "inspect_", "describe_")
+        read_suffixes = ("_telemetry", "_status", "_info", "_state", "_reading", "_readings")
+        if tool_name.startswith(read_prefixes) or tool_name.endswith(read_suffixes):
+            return False, f"Tool '{tool_name}' is a perception/read-only query tool."
+
+        # Check if tool invocation includes explicit action parameters
+        action_param_keys = ("inputAction", "action", "command", "operation")
+        has_action_arg = any(k in tool_args for k in action_param_keys)
+        if not has_action_arg:
+            return False, f"Tool '{tool_name}' has no actuator command parameter."
+
+        return True, ""
 
     async def __call__(self, state: AgentState) -> Dict[str, Any]:
         """
@@ -77,27 +116,61 @@ class FormalGateNode:
         if not tool_call_id:
             tool_call_id = candidate_action.get("id", "call_default")
 
-        # Check if this tool is exempted from formal monitoring
-        if self.monitored_tools is not None and tool_name not in self.monitored_tools:
+        # Check if this tool is exempted from formal monitoring or is a read-only query
+        is_actuator, bypass_reason = self._is_actuator_action(tool_name, tool_args)
+        if not is_actuator:
             return {
                 "guard_verdict": "BYPASS",
-                "guard_feedback": f"Tool '{tool_name}' is not in monitored tools list.",
+                "guard_feedback": bypass_reason,
                 "candidate_action": candidate_action,
                 "sanitised_action": candidate_action,
             }
 
-        # 2. Extract monitored variables and inputAction
-        if "inputAction" in tool_args:
-            monitored_vars["inputAction"] = str(tool_args["inputAction"])
-        elif "action" in tool_args:
-            monitored_vars["inputAction"] = str(tool_args["action"])
-        elif "inputAction" not in monitored_vars:
-            monitored_vars["inputAction"] = tool_name
+        # 2. Extract candidate action value generically
+        candidate_action_val = None
+        for action_key in ("inputAction", "action", "command", "operation"):
+            if action_key in tool_args:
+                candidate_action_val = str(tool_args[action_key])
+                break
+        if not candidate_action_val:
+            candidate_action_val = tool_name
 
-        # Flatten remaining args to string dictionary for AsmetaS
+        monitored_vars["inputAction"] = candidate_action_val
+
+        # Add all arguments from tool_args into monitored_vars generically
         for k, v in tool_args.items():
-            if k not in monitored_vars and isinstance(v, (str, int, float, bool)):
+            if k not in ("action", "command", "operation") and isinstance(v, (str, int, float, bool)):
+                monitored_vars[k] = str(v).lower() if isinstance(v, bool) else str(v)
+
+        # Normalize snake_case keys to camelCase (e.g. right_lane_free -> rightLaneFree)
+        normalized_keys = {}
+        for k, v in list(monitored_vars.items()):
+            if "_" in k:
+                camel_k = "".join(part.capitalize() if i > 0 else part for i, part in enumerate(k.split("_")))
+                normalized_keys[camel_k] = v
+        for k, v in normalized_keys.items():
+            if k not in monitored_vars:
+                monitored_vars[k] = v
+
+        # Parameter extraction from conversational context:
+        # Matches generic patterns like var=value or var: value (e.g. doorOpen=false, light=on, temp=20)
+        for m in reversed(messages):
+            content = getattr(m, "content", "")
+            if isinstance(content, str):
+                matches = re.findall(r'(\b[a-zA-Z_]\w*)\s*[:=]\s*([a-zA-Z0-9_\.-]+)', content)
+                for var_name, var_val in matches:
+                    if var_name not in monitored_vars and var_name not in ("id", "type"):
+                        monitored_vars[var_name] = var_val
+
+        # 3. Populate default monitored variables as fallbacks if still undefined
+        for k, v in self.default_monitored_vars.items():
+            if k not in monitored_vars:
                 monitored_vars[k] = str(v)
+
+        # Apply action mapping if configured (e.g. KEEP -> IDLE)
+        original_action = monitored_vars.get("inputAction")
+        if original_action in self.action_mapping:
+            monitored_vars["inputAction"] = self.action_mapping[original_action]
 
         # 3. Call AsmetaS sanitise_action
         verdict = "ERROR"
@@ -139,10 +212,24 @@ class FormalGateNode:
                     verdict = "ERROR"
                     feedback = res_data.get("message", "Error reported by AsmetaS server.")
                 else:
-                    verdict = res_data.get("verdict", "ERROR")
-                    sanitised_val = res_data.get("sanitised_action")
-                    feedback = res_data.get("feedback", "")
-                    raw_output = res_data.get("raw_output", {})
+                    # Enforce A2A Agent Card schema contract
+                    try:
+                        validated = SanitiseContractResult.model_validate(res_data)
+                        verdict = validated.verdict
+                        sanitised_val = validated.sanitised_action
+                        feedback = validated.feedback
+                        raw_output = validated.raw_output or {}
+
+                        # Apply reverse action mapping if applicable
+                        if sanitised_val and self.action_mapping:
+                            reverse_map = {v: k for k, v in self.action_mapping.items()}
+                            if sanitised_val in reverse_map:
+                                sanitised_val = reverse_map[sanitised_val]
+                    except ValidationError as val_err:
+                        err_detail = val_err.errors()[0]["msg"] if val_err.errors() else str(val_err)
+                        logger.error(f"A2A Contract Violation from AsmetaS enforcer: {val_err}")
+                        verdict = "ERROR"
+                        feedback = f"A2A Contract Violation: response schema mismatch ({err_detail})"
             else:
                 # If no callable provided, default to bypass with warning
                 verdict = "BYPASS"
@@ -163,7 +250,7 @@ class FormalGateNode:
             if self.error_policy == "fail_safe":
                 verdict = "VIOLATION"
                 sanitised_val = self.default_safe_action
-                feedback = f"Formal gate offline/error. Fail-safe applied: defaulting to safe action '{self.default_safe_action}'."
+                feedback = f"Formal gate offline/error ({feedback}). Fail-safe applied: defaulting to safe action '{self.default_safe_action}'."
             else:
                 # fail_stop
                 action_history.append({
