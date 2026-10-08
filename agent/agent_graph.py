@@ -121,6 +121,38 @@ def build_formal_gate_graph(
     return builder.compile()
 
 
+def parse_mcp_response(res: Any) -> tuple[dict, str]:
+    """
+    Parses MCP tool output into (data_dict, raw_text).
+    Handles string JSON, dicts, or lists of content blocks returned by langchain_mcp_adapters.
+    """
+    raw_text = ""
+    if isinstance(res, list) and len(res) > 0:
+        first_item = res[0]
+        if isinstance(first_item, dict) and "text" in first_item:
+            raw_text = str(first_item["text"])
+        elif hasattr(first_item, "text"):
+            raw_text = str(first_item.text)
+        elif isinstance(first_item, str):
+            raw_text = first_item
+        else:
+            raw_text = str(first_item)
+    elif isinstance(res, dict):
+        return res, json.dumps(res)
+    elif isinstance(res, str):
+        raw_text = res
+    else:
+        raw_text = str(res)
+
+    try:
+        data = json.loads(raw_text)
+        if isinstance(data, dict):
+            return data, raw_text
+    except Exception:
+        pass
+    return {}, raw_text
+
+
 async def main():
     """
     Interactive CLI runner for the Formal Gate Agent.
@@ -174,13 +206,26 @@ async def main():
     client = MultiServerMCPClient(mcp_config)
 
     # Separate AsmetaS Formal Gate tools from Environment tools
-    asmetas_tools = await client.get_tools(server_name="asmetas_server")
-    environment_tools = await client.get_tools(server_name="environment_server")
+    try:
+        asmetas_tools = await client.get_tools(server_name="asmetas_server")
+    except Exception as e:
+        print_error(f"❌ Critical error: Failed to connect to AsmetaS MCP server ({e}).")
+        print_error("AsmetaS formal service is not available. Chat will NOT be started.")
+        sys.exit(1)
+
+    try:
+        environment_tools = await client.get_tools(server_name="environment_server")
+    except Exception as e:
+        print_error(f"❌ Critical error: Failed to connect to Environment server ({e}).")
+        print_error("Chat will NOT be started.")
+        sys.exit(1)
 
     # Validate MCP server tools against declared Agent Card skills
     missing_guard_skills = asmetas_card.validate_mcp_tools(asmetas_tools)
     if missing_guard_skills:
-        print_warning(f"⚠️ Missing skills in AsmetaS server: {missing_guard_skills}")
+        print_error(f"❌ Error: Missing required skills in AsmetaS server contract: {missing_guard_skills}")
+        print_error("AsmetaS server does not satisfy the A2A contract. Chat will NOT be started.")
+        sys.exit(1)
     else:
         print_success(f"🛡️ [A2A Verified] All {len(asmetas_card.skills)} skills from '{asmetas_card.name}' contract confirmed.")
 
@@ -201,40 +246,66 @@ async def main():
     list_models_tool = next((t for t in asmetas_tools if t.name == "list_models"), None)
     upload_model_tool = next((t for t in asmetas_tools if t.name == "upload_model"), None)
 
+    if not sanitise_tool or not start_tool:
+        print_error("❌ Critical error: Essential Formal Gate tools (sanitise_action, start_enforcer) are missing.")
+        print_error("AsmetaS formal service is not available. Chat will NOT be started.")
+        sys.exit(1)
+
     # ASM model configuration
     asm_model_name = os.getenv("ASMETA_MODEL_NAME", "SafetyEnforcerModel.asm")
-    default_model_path = os.getenv(
-        "ASMETA_MODEL_PATH",
-        str(Path(__file__).resolve().parent.parent.parent / "AsmetaS-web-service" / "resources" / "models" / asm_model_name)
-    )
+    default_model_path = os.getenv("ASMETA_MODEL_PATH")
 
-    # 1. Query available models on AsmetaS via MCP and upload if missing
-    if list_models_tool and upload_model_tool:
+    # 1. Query available models on AsmetaS via MCP and verify WS availability
+    if list_models_tool:
         try:
             models_info_raw = await list_models_tool.ainvoke({})
-            if isinstance(models_info_raw, list) and len(models_info_raw) > 0:
-                first_item = models_info_raw[0]
-                if isinstance(first_item, dict) and "text" in first_item:
-                    models_info_raw = first_item["text"]
-            models_data = json.loads(models_info_raw) if isinstance(models_info_raw, str) else models_info_raw
-            server_models = models_data.get("models", []) if isinstance(models_data, dict) else []
+            models_data, models_raw = parse_mcp_response(models_info_raw)
+            if models_data.get("status") == "error":
+                err_msg = models_data.get("message", models_raw)
+                print_error(f"❌ Critical error: AsmetaS-web-service is unreachable ({err_msg}).")
+                print_error("AsmetaS formal service is not available. Chat will NOT be started.")
+                sys.exit(1)
 
+            server_models = models_data.get("models", []) if isinstance(models_data, dict) else []
             if asm_model_name not in server_models:
-                print_info(f"📤 Model '{asm_model_name}' not found on AsmetaS server. Uploading via MCP...")
-                upload_res = await upload_model_tool.ainvoke({"model_path": default_model_path})
-                print_info(f"AsmetaS Upload status: {upload_res}")
+                uploaded = False
+                if upload_model_tool and default_model_path and Path(default_model_path).is_file():
+                    print_info(f"📤 Model '{asm_model_name}' not found on AsmetaS. Uploading from {default_model_path}...")
+                    upload_res_raw = await upload_model_tool.ainvoke({"model_path": default_model_path})
+                    upload_data, upload_raw = parse_mcp_response(upload_res_raw)
+                    if upload_data.get("status") == "success":
+                        print_success(f"📤 Model '{asm_model_name}' uploaded successfully to AsmetaS.")
+                        uploaded = True
+                    else:
+                        print_warning(f"Upload failed: {upload_data.get('message', upload_raw)}")
+
+                if not uploaded:
+                    print_error(f"❌ Error: Formal model '{asm_model_name}' is not present on AsmetaS server.")
+                    print_error("Make sure the model resides in AsmetaS-web-service. Chat will NOT be started.")
+                    sys.exit(1)
             else:
                 print_info(f"ℹ️ Model '{asm_model_name}' already present on AsmetaS server.")
         except Exception as e:
-            print_warning(f"⚠️ Model check/upload via MCP failed or server offline: {e}")
+            print_error(f"❌ Critical error: Connection to AsmetaS-web-service failed ({e}).")
+            print_error("AsmetaS formal service is not available. Chat will NOT be started.")
+            sys.exit(1)
 
-    # 2. Attempt to start AsmetaS formal enforcer session via MCP
-    if start_tool:
-        try:
-            init_res = await start_tool.ainvoke({"asm_name": asm_model_name})
-            print_info(f"AsmetaS Enforcer status: {init_res}")
-        except Exception as e:
-            print_warning(f"⚠️ Warning: AsmetaS server not ready or unreachable ({e}). Gate will run in fail-safe fallback.")
+    # 2. Start AsmetaS formal enforcer session via MCP (Fail-Fast)
+    try:
+        init_res_raw = await start_tool.ainvoke({"asm_name": asm_model_name})
+        init_data, init_raw = parse_mcp_response(init_res_raw)
+        if init_data.get("status") == "error":
+            err_msg = init_data.get("message", init_raw)
+            print_error(f"❌ Critical error: Failed to start AsmetaS Enforcer session: {err_msg}")
+            print_error("AsmetaS formal service is not available. Chat will NOT be started.")
+            sys.exit(1)
+
+        exec_id = init_data.get("execution_id", "OK")
+        print_success(f"🛡️ AsmetaS Enforcer session started successfully for '{asm_model_name}' (Session ID: {exec_id})")
+    except Exception as e:
+        print_error(f"❌ Critical error: AsmetaS Enforcer startup failed ({e}).")
+        print_error("AsmetaS formal service is not available. Chat will NOT be started.")
+        sys.exit(1)
 
     # Configurable Action Mapping and Default Monitored Variables
     action_mapping_raw = os.getenv("ACTION_MAPPING", '{"KEEP": "IDLE"}')
@@ -306,7 +377,7 @@ async def main():
             except (KeyboardInterrupt, EOFError):
                 break
             except Exception as e:
-                print_error(f"❌ Errore durante l'esecuzione: {e}")
+                print_error(f"❌ Execution error: {e}")
     finally:
         if stop_tool:
             try:
