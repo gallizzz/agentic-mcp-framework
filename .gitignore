@@ -217,6 +217,6 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
-# Agent System Documentation
+# Local documentation
 AGENTS.md
 ARCHITECTURE.md

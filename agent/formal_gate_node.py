@@ -92,7 +92,7 @@ class FormalGateNode:
         monitored_vars = dict(state.get("monitored_variables") or {})
         tool_call_id = None
 
-        # 1. Extract action from latest AIMessage tool_calls or candidate_action in state
+        # Extract candidate action from latest tool call
         if last_message and hasattr(last_message, "tool_calls") and last_message.tool_calls:
             first_tc = last_message.tool_calls[0]
             candidate_action = {
@@ -103,7 +103,7 @@ class FormalGateNode:
             tool_call_id = first_tc.get("id")
 
         if not candidate_action:
-            # No action proposed (pure conversational turn)
+            # Conversational turn without tool call
             return {
                 "guard_verdict": "BYPASS",
                 "guard_feedback": "No candidate action proposed for evaluation.",
@@ -116,7 +116,7 @@ class FormalGateNode:
         if not tool_call_id:
             tool_call_id = candidate_action.get("id", "call_default")
 
-        # Check if this tool is exempted from formal monitoring or is a read-only query
+        # Bypass gate if tool is read-only (telemetry, query, status)
         is_actuator, bypass_reason = self._is_actuator_action(tool_name, tool_args)
         if not is_actuator:
             return {
@@ -126,7 +126,7 @@ class FormalGateNode:
                 "sanitised_action": candidate_action,
             }
 
-        # 2. Extract candidate action value generically
+        # Resolve candidate action name
         candidate_action_val = None
         for action_key in ("inputAction", "action", "command", "operation"):
             if action_key in tool_args:
@@ -137,12 +137,12 @@ class FormalGateNode:
 
         monitored_vars["inputAction"] = candidate_action_val
 
-        # Add all arguments from tool_args into monitored_vars generically
+        # Map tool arguments into monitored variables
         for k, v in tool_args.items():
             if k not in ("action", "command", "operation") and isinstance(v, (str, int, float, bool)):
                 monitored_vars[k] = str(v).lower() if isinstance(v, bool) else str(v)
 
-        # Normalize snake_case keys to camelCase (e.g. right_lane_free -> rightLaneFree)
+        # Normalize snake_case to camelCase to match ASM variables (e.g. right_lane_free -> rightLaneFree)
         normalized_keys = {}
         for k, v in list(monitored_vars.items()):
             if "_" in k:
@@ -152,8 +152,7 @@ class FormalGateNode:
             if k not in monitored_vars:
                 monitored_vars[k] = v
 
-        # Parameter extraction from conversational context:
-        # Matches generic patterns like var=value or var: value (e.g. doorOpen=false, light=on, temp=20)
+        # Fallback: extract explicit parameter assignments from prompt history (e.g. var=val)
         for m in reversed(messages):
             content = getattr(m, "content", "")
             if isinstance(content, str):
@@ -162,17 +161,17 @@ class FormalGateNode:
                     if var_name not in monitored_vars and var_name not in ("id", "type"):
                         monitored_vars[var_name] = var_val
 
-        # 3. Populate default monitored variables as fallbacks if still undefined
+        # Apply defaults for any variables still missing
         for k, v in self.default_monitored_vars.items():
             if k not in monitored_vars:
                 monitored_vars[k] = str(v)
 
-        # Apply action mapping if configured (e.g. KEEP -> IDLE)
+        # Apply model-specific action aliases (e.g. KEEP -> IDLE)
         original_action = monitored_vars.get("inputAction")
         if original_action in self.action_mapping:
             monitored_vars["inputAction"] = self.action_mapping[original_action]
 
-        # 3. Call AsmetaS sanitise_action
+        # Call AsmetaS sanitise_action tool
         verdict = "ERROR"
         sanitised_val = None
         feedback = ""
@@ -241,27 +240,25 @@ class FormalGateNode:
             verdict = "ERROR"
             feedback = f"Formal Gate exception: {str(e)}"
 
-        # 4. Handle verdict and policies
+        # Process verdict according to policy (approved, violation, error)
         action_history = list(state.get("action_history", []))
         retry_count = state.get("retry_count", 0)
 
-        # Handle ERROR with fallback policy
+        # Handle errors (fail_safe fallback vs fail_stop abort)
         if verdict == "ERROR":
             if self.error_policy == "fail_safe":
                 verdict = "VIOLATION"
                 sanitised_val = self.default_safe_action
                 feedback = f"Formal gate offline/error ({feedback}). Fail-safe applied: defaulting to safe action '{self.default_safe_action}'."
             else:
-                # fail_stop
                 action_history.append({
                     "proposed_action": candidate_action,
                     "monitored_variables": monitored_vars,
                     "verdict": "ERROR",
                     "feedback": feedback,
                 })
-                # Add error tool message
                 error_msg = ToolMessage(
-                    content=f"[Formal Gate Critical Error] {feedback}",
+                    content=f"[Formal Gate Error] {feedback}",
                     tool_call_id=tool_call_id,
                     status="error",
                 )
@@ -274,7 +271,7 @@ class FormalGateNode:
                     "messages": [error_msg],
                 }
 
-        # Handle APPROVED
+        # Passed formal checks without violations
         if verdict == "APPROVED":
             sanitised_action = dict(candidate_action)
             action_history.append({
@@ -292,9 +289,8 @@ class FormalGateNode:
                 "action_history": action_history,
             }
 
-        # Handle VIOLATION
+        # Violation detected: apply shielding or route for replanning
         if verdict == "VIOLATION":
-            # Build sanitised action structure
             sanitised_args = dict(tool_args)
             if "inputAction" in sanitised_args:
                 sanitised_args["inputAction"] = sanitised_val

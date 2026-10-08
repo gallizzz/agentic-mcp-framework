@@ -90,7 +90,7 @@ def execute_vehicle_action(
     save_vehicle_state(vehicle_state)
 
     timestamp = time.strftime('%X')
-    print(f"\n[{timestamp}] 🚗 [VEHICLE ACTUATOR] Executed: '{action_upper}' | Speed: {previous_speed} -> {vehicle_state['speed']} km/h | Lane: {vehicle_state['lane']}\n")
+    print(f"\n[{timestamp}] [vehicle] Executed '{action_upper}' | speed: {previous_speed} -> {vehicle_state['speed']} km/h | lane: {vehicle_state['lane']}\n")
 
     return (
         f"Vehicle action '{action_upper}' successfully executed. "

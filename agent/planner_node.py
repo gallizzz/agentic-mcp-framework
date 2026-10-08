@@ -8,10 +8,7 @@ from agent.agent_state import AgentState
 
 
 def build_default_system_prompt(tools: Optional[List[BaseTool]] = None) -> str:
-    """
-    Constructs the default system prompt for the Planner LLM,
-    injecting available tool names and operative guidance.
-    """
+    """Default system prompt for the planner LLM, injecting available tools."""
     tool_names = [t.name for t in tools] if tools else []
     return (
         f"Sei un assistente intelligente che opera all'interno di un sistema critico verificato formalmente.\n"
@@ -29,10 +26,7 @@ def build_default_system_prompt(tools: Optional[List[BaseTool]] = None) -> str:
 
 
 class PlannerNode:
-    """
-    Planner LLM node that processes conversation history and proposes
-    candidate actions bound to environment tools.
-    """
+    """Generates next agent actions or responses using the LLM."""
 
     def __init__(
         self,
@@ -50,11 +44,8 @@ class PlannerNode:
         self.llm_with_tools = self.llm.bind_tools(self.tools) if self.tools else self.llm
 
     async def __call__(self, state: AgentState) -> Dict[str, Any]:
-        """
-        Executes the Planner LLM invocation.
-        """
         messages = list(state.get("messages", []))
-        # Prepend system prompt if provided and not already present
+        # Ensure system prompt is prepended once
         if self.system_prompt and (not messages or not isinstance(messages[0], SystemMessage)):
             messages = [SystemMessage(content=self.system_prompt)] + messages
 
@@ -67,24 +58,18 @@ def create_planner_node(
     tools: Optional[List[BaseTool]] = None,
     system_prompt: Optional[str] = None,
 ) -> PlannerNode:
-    """
-    Factory function returning an instantiated PlannerNode.
-    """
     return PlannerNode(llm=llm, tools=tools, system_prompt=system_prompt)
 
 
 def planner_router(state: AgentState) -> str:
-    """
-    Inspects planner output. If a tool call was proposed, route to Formal Gate.
-    Otherwise, conversation is complete -> route to END.
-    """
+    """Route tool calls to formal_gate, or terminate turn if no tools were called."""
     messages = state.get("messages", [])
     if not messages:
         return END
 
     last_message = messages[-1]
     if hasattr(last_message, "tool_calls") and last_message.tool_calls:
-        # Safeguard: prevent runaway tool loops if multiple actions were already executed in turn
+        # Prevent runaway tool calling loops in the same turn
         action_history = state.get("action_history", [])
         if len(action_history) >= 3:
             return END

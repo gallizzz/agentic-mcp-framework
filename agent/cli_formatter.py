@@ -33,61 +33,52 @@ def extract_text_content(content: Any) -> str:
 
 
 def print_banner():
-    """Prints the architecture introductory banner."""
     console.print(
         Panel.fit(
-            "[bold cyan]LangGraph Formal Gate Architecture[/bold cyan]\n"
-            "[dim]Planner (LLM) ---> Formal Gate (AsmetaS) ---> Environment (Action)[/dim]",
+            "[bold cyan]LangGraph Formal Gate[/bold cyan]\n"
+            "[dim]Planner (LLM) -> Formal Gate (AsmetaS) -> Environment[/dim]",
             border_style="cyan",
         )
     )
 
 
 def print_info(message: str, prefix_time: bool = True):
-    """Prints a dimmed info log message."""
     ts = f"[{time.strftime('%X')}] " if prefix_time else ""
     console.print(f"{ts}{message}", style="dim")
 
 
 def print_warning(message: str, prefix_time: bool = True):
-    """Prints a warning log message."""
     ts = f"[{time.strftime('%X')}] " if prefix_time else ""
     console.print(f"{ts}{message}", style="yellow")
 
 
 def print_error(message: str, prefix_time: bool = True):
-    """Prints an error log message."""
     ts = f"[{time.strftime('%X')}] " if prefix_time else ""
     console.print(f"{ts}{message}", style="bold red")
 
 
 def print_success(message: str, prefix_time: bool = True):
-    """Prints a success message."""
     ts = f"[{time.strftime('%X')}] " if prefix_time else ""
     console.print(f"{ts}{message}", style="green")
 
 
 def print_ready_prompt():
-    """Prints the session ready message."""
     console.print(
-        f"\n[{time.strftime('%X')}] === Formal Gate Agent is ready! ===",
+        f"\n[{time.strftime('%X')}] Formal Gate Agent ready.",
         style="bold green",
     )
     console.print("Type your requests below. Type 'exit' or 'quit' to terminate.", style="dim")
 
 
 def print_divider():
-    """Prints a visual divider line."""
     console.print("-" * 40, style="dim")
 
 
 def print_session_end():
-    """Prints the session termination notice."""
     console.print(f"\n[{time.strftime('%X')}] Session terminated.", style="dim")
 
 
-def get_status_spinner(message: str = "Formal Agent is executing..."):
-    """Returns a Rich status spinner context manager."""
+def get_status_spinner(message: str = "Processing..."):
     return console.status(
         f"[bold green][{time.strftime('%X')}] {message}",
         spinner="dots",
@@ -95,12 +86,8 @@ def get_status_spinner(message: str = "Formal Agent is executing..."):
 
 
 def print_step_update(step_data: Dict[str, Any]):
-    """
-    Renders clean, styled terminal output for each node invocation in LangGraph.
-    """
     timestamp = time.strftime("%X")
 
-    # 1. Planner Node
     if "planner" in step_data:
         msgs = step_data["planner"].get("messages", [])
         if msgs:
@@ -108,16 +95,15 @@ def print_step_update(step_data: Dict[str, Any]):
             if hasattr(msg, "tool_calls") and msg.tool_calls:
                 for tc in msg.tool_calls:
                     console.print(
-                        f"[{timestamp}] 🤖 [Planner] Proposed action: '{tc['name']}' with args: {tc['args']}",
+                        f"[{timestamp}] [planner] Proposed action: '{tc['name']}' ({tc['args']})",
                         style="bold cyan",
                     )
             elif msg.content:
                 text = extract_text_content(msg.content)
                 if text:
-                    console.print(f"\n[{timestamp}] 🤖 Agent:", style="bold cyan")
+                    console.print(f"\n[{timestamp}] [agent]", style="bold cyan")
                     console.print(Markdown(text))
 
-    # 2. Formal Gate Node
     if "formal_gate" in step_data:
         gate_res = step_data["formal_gate"]
         verdict = gate_res.get("guard_verdict")
@@ -126,30 +112,29 @@ def print_step_update(step_data: Dict[str, Any]):
 
         if verdict == "APPROVED":
             console.print(
-                f"[{timestamp}] 🛡️ [Formal Gate - AsmetaS] Verdict: [bold green]APPROVED[/bold green] | {feedback}",
+                f"[{timestamp}] [formal-gate] Verdict: [bold green]APPROVED[/bold green] | {feedback}",
                 style="green",
             )
         elif verdict == "VIOLATION":
             sanitised_display = sanitised.get("args") if sanitised else "None"
             console.print(
-                f"[{timestamp}] 🛡️ [Formal Gate - AsmetaS] Verdict: [bold yellow]VIOLATION[/bold yellow] | "
-                f"Shielded/Sanitised to: {sanitised_display}\n"
-                f"    [dim]Formal feedback: {feedback}[/dim]",
+                f"[{timestamp}] [formal-gate] Verdict: [bold yellow]VIOLATION[/bold yellow] | "
+                f"Shielded to: {sanitised_display}\n"
+                f"    [dim]Feedback: {feedback}[/dim]",
                 style="yellow",
             )
         elif verdict == "ERROR":
             console.print(
-                f"[{timestamp}] 🛡️ [Formal Gate - AsmetaS] Verdict: [bold red]ERROR[/bold red] | {feedback}",
+                f"[{timestamp}] [formal-gate] Verdict: [bold red]ERROR[/bold red] | {feedback}",
                 style="red",
             )
         elif verdict == "BYPASS":
-            console.print(f"[{timestamp}] 🛡️ [Formal Gate] Bypass: {feedback}", style="dim")
+            console.print(f"[{timestamp}] [formal-gate] Bypass: {feedback}", style="dim")
 
-    # 3. Environment Actuator Node
     if "environment" in step_data:
         env_res = step_data["environment"].get("messages", [])
         for tool_msg in env_res:
             content = extract_text_content(tool_msg.content)
             max_len = 200
             truncated = content[:max_len] + ("..." if len(content) > max_len else "")
-            console.print(f"[{timestamp}] ⚙️ [Environment Output] {truncated}", style="dim green")
+            console.print(f"[{timestamp}] [env] {truncated}", style="dim green")

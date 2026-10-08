@@ -1,9 +1,6 @@
 # agentic-mcp-framework
 
 [![Python 3.11](https://img.shields.io/badge/python-3.11-blue.svg)](https://www.python.org/)
-[![LangGraph](https://img.shields.io/badge/orchestration-LangGraph-orange.svg)](https://github.com/langchain-ai/langgraph)
-[![MCP](https://img.shields.io/badge/protocol-MCP%20FastMCP-green.svg)](https://modelcontextprotocol.io/)
-[![Formal Verification](https://img.shields.io/badge/formal%20guard-AsmetaS%20%28ASM%29-purple.svg)](https://github.com/foselab/AsmetaS-web-service)
 
 Framework per l'integrazione di agenti basati su **LangGraph** e **Model Context Protocol (MCP)** con verifica formale deterministica a runtime tramite **AsmetaS** (Abstract State Machines).
 
@@ -50,14 +47,7 @@ ASMETAS_URL=http://localhost:8080
 
 ### 3. Avvia il server formale AsmetaS
 
-In un terminale separato, avvia il runtime di AsmetaS:
-
-```bash
-cd ../AsmetaS-web-service/asmeta\ server
-python asmeta_runtime_server.py
-```
-
-Il server Spring Boot sarà in ascolto su `http://localhost:8080`.
+Segui il README.md del progetto [AsmetaS-web-service](https://github.com/foselab/AsmetaS-web-service) fino ad avviare lo script main.py del toy_example.
 
 ---
 
