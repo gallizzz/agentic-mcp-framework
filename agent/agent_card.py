@@ -9,11 +9,9 @@ import json
 import logging
 from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional, Union
-
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field
 
 logger = logging.getLogger("agent_card")
-
 
 class SkillDefinition(BaseModel):
     """

@@ -1,367 +1,397 @@
+"""Formal Gate Node for LangGraph.
+
+Intercepts proposed actions, communicates with the AsmetaS MCP server, and
+enforces runtime formal verification and action sanitisation.
 """
-Formal Gate Node for LangGraph.
-Intercepts proposed actions, communicates with the AsmetaS MCP server,
-and enforces runtime formal verification and action sanitisation.
-"""
+
 import json
 import logging
-import os
-from pathlib import Path
 import re
-from typing import Any, Callable, Dict, Literal, Optional
+from typing import Any, Callable, Dict, Literal, Optional, Tuple
 from langchain_core.messages import ToolMessage
 from pydantic import ValidationError
+
 from agent.agent_card import AgentCard, SanitiseContractResult
 from agent.agent_state import AgentState
 
 logger = logging.getLogger("formal_gate")
 
 
+# ============================================================================
+# HELPER FUNCTIONS: Variable Extraction & Normalisation
+# ============================================================================
+
+def _to_camel_case(snake_str: str) -> str:
+  """Converts a snake_case string to camelCase."""
+  if "_" not in snake_str:
+    return snake_str
+  parts = snake_str.split("_")
+  return parts[0] + "".join(p.capitalize() for p in parts[1:])
+
+
+def _extract_monitored_variables(
+    tool_args: dict,
+    messages: list,
+    default_vars: dict,
+    action_mapping: dict,
+) -> dict:
+  """Extracts, normalises (snake -> camelCase), and resolves default monitored
+
+  variables for the formal model.
+  """
+  monitored_vars = {}
+
+  # Resolve primary inputAction
+  action_val = next(
+      (
+          str(tool_args[k])
+          for k in ("inputAction", "action", "command", "operation")
+          if k in tool_args
+      ),
+      None,
+  )
+  monitored_vars["inputAction"] = action_val or "IDLE"
+
+  # Extract primitive tool args
+  for k, v in tool_args.items():
+      if k not in ("action", "command", "operation") and isinstance(
+          v, (str, int, float, bool)
+      ):
+          monitored_vars[k] = str(v).lower() if isinstance(v, bool) else str(v)
+
+  # Normalise keys to camelCase for ASM
+  camel_vars = {
+      _to_camel_case(k): v
+      for k, v in monitored_vars.items()
+      if _to_camel_case(k) not in monitored_vars
+  }
+  monitored_vars.update(camel_vars)
+
+  # Fallback: Parse explicit var=val patterns from user/prompt history
+  for m in reversed(messages):
+    content = getattr(m, "content", "")
+    if isinstance(content, str):
+      for var_name, var_val in re.findall(
+          r"(\b[a-zA-Z_]\w*)\s*[:=]\s*([a-zA-Z0-9_\.-]+)", content
+      ):
+        if var_name not in monitored_vars and var_name not in ("id", "type"):
+          monitored_vars[var_name] = var_val
+
+  # Apply default fallback values
+  for k, v in default_vars.items():
+    monitored_vars.setdefault(k, str(v))
+
+  # Apply action alias mapping (e.g. KEEP -> IDLE)
+  current_act = monitored_vars.get("inputAction")
+  if current_act in action_mapping:
+    monitored_vars["inputAction"] = action_mapping[current_act]
+
+  return monitored_vars
+
+
+# ============================================================================
+# HELPER FUNCTIONS: Callable Execution & Contract Parsing
+# ============================================================================
+
+async def _invoke_sanitise_callable(
+    callable_obj: Any, monitored_vars: dict
+) -> tuple[str, str | None, str, dict]:
+  """Handles calling AsmetaS via various interface signatures (ainvoke, invoke, async/sync)
+  and validates response against Agent Card schema.
+  """
+  if callable_obj is None:
+    return (
+        "BYPASS",
+        monitored_vars.get("inputAction"),
+        "Passthrough mode (no enforcer attached).",
+        {},
+    )
+
+  try:
+    # Polymorphic invocation
+    if hasattr(callable_obj, "ainvoke"):
+      res = await callable_obj.ainvoke({"monitored_variables": monitored_vars})
+    elif hasattr(callable_obj, "invoke"):
+      res = callable_obj.invoke({"monitored_variables": monitored_vars})
+    elif callable(callable_obj):
+      res = callable_obj(monitored_vars)
+      if hasattr(res, "__await__"):
+        res = await res
+    else:
+      raise ValueError(f"Unsupported callable type: {type(callable_obj)}")
+
+    # Handle LangChain / MCP Adapter content blocks
+    if isinstance(res, list) and res:
+      first = res[0]
+      res = (
+          first.get("text", "")
+          if isinstance(first, dict)
+          else (first if isinstance(first, str) else res)
+      )
+
+    # Parse response format
+    res_data = json.loads(res) if isinstance(res, str) else res
+    if not isinstance(res_data, dict):
+      return "ERROR", None, f"Unexpected response type: {type(res_data)}", {}
+
+    if res_data.get("status") == "error":
+      return (
+          "ERROR",
+          None,
+          res_data.get("message", "Error reported by AsmetaS server."),
+          {},
+      )
+
+    # Validate against A2A Agent Card contract
+    validated = SanitiseContractResult.model_validate(res_data)
+    return (
+        validated.verdict,
+        validated.sanitised_action,
+        validated.feedback,
+        validated.raw_output or {},
+    )
+
+  except ValidationError as val_err:
+    err_msg = val_err.errors()[0]["msg"] if val_err.errors() else str(val_err)
+    logger.error(f"A2A Contract Violation: {val_err}")
+    return "ERROR", None, f"A2A Contract Schema Error: {err_msg}", {}
+  except Exception as e:
+    logger.error(f"AsmetaS invocation error: {e}")
+    return "ERROR", None, f"Enforcer exception: {str(e)}", {}
+
+
+# ============================================================================
+# MAIN NODE CLASS
+# ============================================================================
+
 class FormalGateNode:
-    """
-    Deterministic gate that intercepts candidate actions, evaluates them
-    against AsmetaS formal ASM specifications, and applies shielding or feedback.
-    Enforces A2A contracts based on AgentCard specifications.
-    """
+  """Deterministic gate that intercepts candidate actions, evaluates them
+  against AsmetaS formal specifications, and applies shielding or replanning.
+  """
 
-    def __init__(
-        self,
-        default_safe_action: str,
-        sanitise_action_callable: Optional[Callable],
-        policy: Literal["shielding", "replan"],
-        error_policy: Literal["fail_stop", "fail_safe"],
-        monitored_tools: Optional[list[str]],
-        agent_card: Optional[AgentCard],
-        action_mapping: Optional[Dict[str, str]],
-        default_monitored_vars: Optional[Dict[str, str]],
-    ):
-        """
-        Args:
-            sanitise_action_callable: Async or sync callable to invoke AsmetaS sanitise_action.
-            policy: 'shielding' (sanitise action and proceed) or 'replan' (feedback to LLM).
-            error_policy: 'fail_stop' (abort on error) or 'fail_safe' (force default safe action).
-            default_safe_action: Fallback action when fail_safe is active.
-            monitored_tools: List of tool names to intercept.
-            agent_card: Optional AgentCard contract specification for runtime schema validation.
-            action_mapping: Optional mapping between environment action names and formal model actions (e.g. {'KEEP': 'IDLE'}).
-            default_monitored_vars: Optional default values for formal model monitored variables.
-        """
-        self.sanitise_action_callable = sanitise_action_callable
-        self.policy = policy
-        self.error_policy = error_policy
-        self.default_safe_action = default_safe_action
-        self.monitored_tools = monitored_tools
-        self.agent_card = agent_card
-        self.action_mapping = dict(action_mapping or {})
-        self.default_monitored_vars = dict(default_monitored_vars or {})
+  def __init__(
+      self,
+      default_safe_action: str,
+      sanitise_action_callable: Optional[Callable] = None,
+      policy: Literal["shielding", "replan"] = "shielding",
+      error_policy: Literal["fail_stop", "fail_safe"] = "fail_safe",
+      monitored_tools: Optional[list[str]] = None,
+      agent_card: Optional[AgentCard] = None,
+      action_mapping: Optional[Dict[str, str]] = None,
+      default_monitored_vars: Optional[Dict[str, str]] = None,
+  ):
+    self.sanitise_action_callable = sanitise_action_callable
+    self.policy = policy
+    self.error_policy = error_policy
+    self.default_safe_action = default_safe_action
+    self.monitored_tools = monitored_tools
+    self.agent_card = agent_card
+    self.action_mapping = dict(action_mapping or {})
+    self.default_monitored_vars = dict(default_monitored_vars or {})
 
-    def _is_actuator_action(self, tool_name: str, tool_args: dict) -> tuple[bool, str]:
-        """
-        Determines whether a tool invocation is an actuator action that must be guarded,
-        or a perception/read-only query that can bypass the formal gate.
-        """
-        if self.monitored_tools is not None:
-            if tool_name in self.monitored_tools:
-                return True, ""
-            return False, f"Tool '{tool_name}' is not in monitored tools list."
-
-        # Read-only query / sensor naming patterns
-        read_prefixes = ("get_", "read_", "list_", "query_", "fetch_", "status_", "show_", "check_", "inspect_", "describe_")
-        read_suffixes = ("_telemetry", "_status", "_info", "_state", "_reading", "_readings")
-        if tool_name.startswith(read_prefixes) or tool_name.endswith(read_suffixes):
-            return False, f"Tool '{tool_name}' is a perception/read-only query tool."
-
-        # Check if tool invocation includes explicit action parameters
-        action_param_keys = ("inputAction", "action", "command", "operation")
-        has_action_arg = any(k in tool_args for k in action_param_keys)
-        if not has_action_arg:
-            return False, f"Tool '{tool_name}' has no actuator command parameter."
-
+  def _is_actuator_action(
+      self, tool_name: str, tool_args: dict
+  ) -> Tuple[bool, str]:
+    """Determines whether a tool call is an actuator command or a read-only query."""
+    if self.monitored_tools is not None:
+      if tool_name in self.monitored_tools:
         return True, ""
+      return False, f"Tool '{tool_name}' is not in monitored tools list."
 
-    async def __call__(self, state: AgentState) -> Dict[str, Any]:
-        """
-        Node execution function compatible with LangGraph.
-        """
-        messages = list(state.get("messages", []))
-        last_message = messages[-1] if messages else None
+    # Read-only query / telemetry filters
+    read_prefixes = (
+        "get_",
+        "read_",
+        "list_",
+        "query_",
+        "fetch_",
+        "status_",
+        "show_",
+        "check_",
+    )
+    read_suffixes = (
+        "_telemetry",
+        "_status",
+        "_info",
+        "_state",
+        "_reading",
+        "_readings",
+    )
+    if tool_name.startswith(read_prefixes) or tool_name.endswith(read_suffixes):
+      return False, f"Tool '{tool_name}' is a perception/read-only query tool."
 
-        candidate_action = state.get("candidate_action")
-        monitored_vars = dict(state.get("monitored_variables") or {})
-        tool_call_id = None
+    action_keys = ("inputAction", "action", "command", "operation")
+    if not any(k in tool_args for k in action_keys):
+      return False, f"Tool '{tool_name}' has no actuator command parameter."
 
-        # Extract candidate action from latest tool call
-        if last_message and hasattr(last_message, "tool_calls") and last_message.tool_calls:
-            first_tc = last_message.tool_calls[0]
-            candidate_action = {
-                "name": first_tc["name"],
-                "args": dict(first_tc.get("args") or {}),
-                "id": first_tc.get("id"),
-            }
-            tool_call_id = first_tc.get("id")
+    return True, ""
 
-        if not candidate_action:
-            # Conversational turn without tool call
-            return {
-                "guard_verdict": "BYPASS",
-                "guard_feedback": "No candidate action proposed for evaluation.",
-                "candidate_action": None,
-                "sanitised_action": None,
-            }
+  async def __call__(self, state: AgentState) -> Dict[str, Any]:
+    messages = list(state.get("messages", []))
+    last_msg = messages[-1] if messages else None
+    action_history = list(state.get("action_history", []))
 
-        tool_name = candidate_action.get("name", "")
-        tool_args = candidate_action.get("args", {})
-        if not tool_call_id:
-            tool_call_id = candidate_action.get("id", "call_default")
+    # Extract Candidate Action from last Message
+    candidate_action = state.get("candidate_action")
+    tool_call_id = None
 
-        # Bypass gate if tool is read-only (telemetry, query, status)
-        is_actuator, bypass_reason = self._is_actuator_action(tool_name, tool_args)
-        if not is_actuator:
-            return {
-                "guard_verdict": "BYPASS",
-                "guard_feedback": bypass_reason,
-                "candidate_action": candidate_action,
-                "sanitised_action": candidate_action,
-            }
+    if last_msg and getattr(last_msg, "tool_calls", None):
+      first_tc = last_msg.tool_calls[0]
+      candidate_action = {
+          "name": first_tc["name"],
+          "args": dict(first_tc.get("args") or {}),
+          "id": first_tc.get("id"),
+      }
+      tool_call_id = first_tc.get("id")
 
-        # Resolve candidate action name
-        candidate_action_val = None
-        for action_key in ("inputAction", "action", "command", "operation"):
-            if action_key in tool_args:
-                candidate_action_val = str(tool_args[action_key])
-                break
-        if not candidate_action_val:
-            candidate_action_val = tool_name
+    if not candidate_action:
+      return {
+          "guard_verdict": "BYPASS",
+          "guard_feedback": "No candidate action proposed.",
+          "candidate_action": None,
+          "sanitised_action": None,
+      }
 
-        monitored_vars["inputAction"] = candidate_action_val
+    tool_name = candidate_action.get("name", "")
+    tool_args = candidate_action.get("args", {})
+    tool_call_id = tool_call_id or candidate_action.get("id", "call_default")
 
-        # Map tool arguments into monitored variables
-        for k, v in tool_args.items():
-            if k not in ("action", "command", "operation") and isinstance(v, (str, int, float, bool)):
-                monitored_vars[k] = str(v).lower() if isinstance(v, bool) else str(v)
+    #  Gate Bypass for Read-Only Perception Tools
+    is_actuator, bypass_reason = self._is_actuator_action(tool_name, tool_args)
+    if not is_actuator:
+      return {
+          "guard_verdict": "BYPASS",
+          "guard_feedback": bypass_reason,
+          "candidate_action": candidate_action,
+          "sanitised_action": candidate_action,
+      }
 
-        # Normalize snake_case to camelCase to match ASM variables (e.g. right_lane_free -> rightLaneFree)
-        normalized_keys = {}
-        for k, v in list(monitored_vars.items()):
-            if "_" in k:
-                camel_k = "".join(part.capitalize() if i > 0 else part for i, part in enumerate(k.split("_")))
-                normalized_keys[camel_k] = v
-        for k, v in normalized_keys.items():
-            if k not in monitored_vars:
-                monitored_vars[k] = v
+    #  Extract & Normalise Monitored State Variables
+    monitored_vars = _extract_monitored_variables(
+        tool_args,
+        messages,
+        self.default_monitored_vars,
+        self.action_mapping,
+    )
 
-        # Fallback: extract explicit parameter assignments from prompt history (e.g. var=val)
-        for m in reversed(messages):
-            content = getattr(m, "content", "")
-            if isinstance(content, str):
-                matches = re.findall(r'(\b[a-zA-Z_]\w*)\s*[:=]\s*([a-zA-Z0-9_\.-]+)', content)
-                for var_name, var_val in matches:
-                    if var_name not in monitored_vars and var_name not in ("id", "type"):
-                        monitored_vars[var_name] = var_val
+    # Invoke AsmetaS Formal Enforcer
+    verdict, sanitised_val, feedback, raw_output = (
+        await _invoke_sanitise_callable(
+            self.sanitise_action_callable, monitored_vars
+        )
+    )
 
-        # Apply defaults for any variables still missing
-        for k, v in self.default_monitored_vars.items():
-            if k not in monitored_vars:
-                monitored_vars[k] = str(v)
+    # Reverse action mapping if applicable
+    if sanitised_val and self.action_mapping:
+      rev_map = {v: k for k, v in self.action_mapping.items()}
+      sanitised_val = rev_map.get(sanitised_val, sanitised_val)
 
-        # Apply model-specific action aliases (e.g. KEEP -> IDLE)
-        original_action = monitored_vars.get("inputAction")
-        if original_action in self.action_mapping:
-            monitored_vars["inputAction"] = self.action_mapping[original_action]
-
-        # Call AsmetaS sanitise_action tool
-        verdict = "ERROR"
-        sanitised_val = None
-        feedback = ""
-        raw_output = {}
-
-        try:
-            if self.sanitise_action_callable is not None:
-                # Invoke the tool
-                if hasattr(self.sanitise_action_callable, "ainvoke"):
-                    res = await self.sanitise_action_callable.ainvoke({"monitored_variables": monitored_vars})
-                elif hasattr(self.sanitise_action_callable, "invoke"):
-                    res = self.sanitise_action_callable.invoke({"monitored_variables": monitored_vars})
-                elif callable(self.sanitise_action_callable):
-                    res = self.sanitise_action_callable(monitored_vars)
-                    if hasattr(res, "__await__"):
-                        res = await res
-                else:
-                    raise ValueError(f"Unsupported callable: {type(self.sanitise_action_callable)}")
-
-                # If list of content blocks (standard for langchain_mcp_adapters), extract text
-                if isinstance(res, list) and len(res) > 0:
-                    first_item = res[0]
-                    if isinstance(first_item, dict) and "text" in first_item:
-                        res = first_item["text"]
-                    elif isinstance(first_item, str):
-                        res = first_item
-
-                # Parse JSON string if response is str
-                if isinstance(res, str):
-                    res_data = json.loads(res)
-                elif isinstance(res, dict):
-                    res_data = res
-                else:
-                    res_data = {"status": "error", "message": f"Unexpected response type: {type(res)}"}
-
-                if res_data.get("status") == "error":
-                    verdict = "ERROR"
-                    feedback = res_data.get("message", "Error reported by AsmetaS server.")
-                else:
-                    # Enforce A2A Agent Card schema contract
-                    try:
-                        validated = SanitiseContractResult.model_validate(res_data)
-                        verdict = validated.verdict
-                        sanitised_val = validated.sanitised_action
-                        feedback = validated.feedback
-                        raw_output = validated.raw_output or {}
-
-                        # Apply reverse action mapping if applicable
-                        if sanitised_val and self.action_mapping:
-                            reverse_map = {v: k for k, v in self.action_mapping.items()}
-                            if sanitised_val in reverse_map:
-                                sanitised_val = reverse_map[sanitised_val]
-                    except ValidationError as val_err:
-                        err_detail = val_err.errors()[0]["msg"] if val_err.errors() else str(val_err)
-                        logger.error(f"A2A Contract Violation from AsmetaS enforcer: {val_err}")
-                        verdict = "ERROR"
-                        feedback = f"A2A Contract Violation: response schema mismatch ({err_detail})"
-            else:
-                # If no callable provided, default to bypass with warning
-                verdict = "BYPASS"
-                feedback = "Formal Gate running in mock/passthrough mode (no enforcer attached)."
-                sanitised_val = monitored_vars.get("inputAction")
-
-        except Exception as e:
-            logger.error(f"Formal Gate evaluation error: {e}")
-            verdict = "ERROR"
-            feedback = f"Formal Gate exception: {str(e)}"
-
-        # Process verdict according to policy (approved, violation, error)
-        action_history = list(state.get("action_history", []))
-        retry_count = state.get("retry_count", 0)
-
-        # Handle errors (fail_safe fallback vs fail_stop abort)
-        if verdict == "ERROR":
-            if self.error_policy == "fail_safe":
-                verdict = "VIOLATION"
-                sanitised_val = self.default_safe_action
-                feedback = f"Formal gate offline/error ({feedback}). Fail-safe applied: defaulting to safe action '{self.default_safe_action}'."
-            else:
-                action_history.append({
-                    "proposed_action": candidate_action,
-                    "monitored_variables": monitored_vars,
-                    "verdict": "ERROR",
-                    "feedback": feedback,
-                })
-                error_msg = ToolMessage(
+    # Handle Errors & Fail-Safe Policy
+    if verdict == "ERROR":
+      if self.error_policy == "fail_safe":
+        verdict = "VIOLATION"
+        sanitised_val = self.default_safe_action
+        feedback = f"Enforcer offline ({feedback}). Fail-safe applied: '{self.default_safe_action}'."
+      else:
+        action_history.append({
+            "proposed_action": candidate_action,
+            "monitored_variables": monitored_vars,
+            "verdict": "ERROR",
+            "feedback": feedback,
+        })
+        return {
+            "guard_verdict": "ERROR",
+            "guard_feedback": feedback,
+            "candidate_action": candidate_action,
+            "sanitised_action": None,
+            "action_history": action_history,
+            "messages": [
+                ToolMessage(
                     content=f"[Formal Gate Error] {feedback}",
                     tool_call_id=tool_call_id,
                     status="error",
                 )
-                return {
-                    "guard_verdict": "ERROR",
-                    "guard_feedback": feedback,
-                    "candidate_action": candidate_action,
-                    "sanitised_action": None,
-                    "action_history": action_history,
-                    "messages": [error_msg],
-                }
+            ],
+        }
 
-        # Passed formal checks without violations
-        if verdict == "APPROVED":
-            sanitised_action = dict(candidate_action)
-            action_history.append({
-                "proposed_action": candidate_action,
-                "monitored_variables": monitored_vars,
-                "verdict": "APPROVED",
-                "feedback": feedback,
-                "raw_output": raw_output,
-            })
-            return {
-                "guard_verdict": "APPROVED",
-                "guard_feedback": feedback,
-                "candidate_action": candidate_action,
-                "sanitised_action": sanitised_action,
-                "action_history": action_history,
-            }
+    # Process Verdicts (APPROVED vs VIOLATION)
+    if verdict == "APPROVED":
+      action_history.append({
+          "proposed_action": candidate_action,
+          "monitored_variables": monitored_vars,
+          "verdict": "APPROVED",
+          "feedback": feedback,
+          "raw_output": raw_output,
+      })
+      return {
+          "guard_verdict": "APPROVED",
+          "guard_feedback": feedback,
+          "candidate_action": candidate_action,
+          "sanitised_action": dict(candidate_action),
+          "action_history": action_history,
+      }
 
-        # Violation detected: apply shielding or route for replanning
-        if verdict == "VIOLATION":
-            sanitised_args = dict(tool_args)
-            if "inputAction" in sanitised_args:
-                sanitised_args["inputAction"] = sanitised_val
-            elif "action" in sanitised_args:
-                sanitised_args["action"] = sanitised_val
-            else:
-                sanitised_args["inputAction"] = sanitised_val
+    if verdict == "VIOLATION":
+      sanitised_args = dict(tool_args)
+      target_key = next(
+          (k for k in ("inputAction", "action") if k in sanitised_args),
+          "inputAction",
+      )
+      sanitised_args[target_key] = sanitised_val
 
-            sanitised_action = {
-                "name": tool_name,
-                "args": sanitised_args,
-                "id": tool_call_id,
-            }
+      sanitised_action = {
+          "name": tool_name,
+          "args": sanitised_args,
+          "id": tool_call_id,
+      }
+      action_history.append({
+          "proposed_action": candidate_action,
+          "monitored_variables": monitored_vars,
+          "verdict": "VIOLATION",
+          "sanitised_action": sanitised_action,
+          "feedback": feedback,
+          "raw_output": raw_output,
+      })
 
-            action_history.append({
-                "proposed_action": candidate_action,
-                "monitored_variables": monitored_vars,
-                "verdict": "VIOLATION",
-                "sanitised_action": sanitised_action,
-                "feedback": feedback,
-                "raw_output": raw_output,
-            })
-
-            if self.policy == "replan":
-                # Inject formal feedback into messages for the Planner to reflect and fix
-                replan_feedback_msg = ToolMessage(
+      if self.policy == "replan":
+        return {
+            "guard_verdict": "VIOLATION",
+            "guard_feedback": feedback,
+            "candidate_action": candidate_action,
+            "sanitised_action": sanitised_action,
+            "action_history": action_history,
+            "retry_count": state.get("retry_count", 0) + 1,
+            "messages": [
+                ToolMessage(
                     content=(
-                        f"[Formal Gate Rejection] Action violates safety invariants. "
-                        f"Feedback: {feedback}. Proposed action was rejected. "
-                        f"Please propose an alternative safe action."
+                        "[Formal Gate Rejection] Action violates safety"
+                        f" invariants. Feedback: {feedback}."
                     ),
                     tool_call_id=tool_call_id,
                     status="error",
                 )
-                return {
-                    "guard_verdict": "VIOLATION",
-                    "guard_feedback": feedback,
-                    "candidate_action": candidate_action,
-                    "sanitised_action": sanitised_action,
-                    "action_history": action_history,
-                    "retry_count": retry_count + 1,
-                    "messages": [replan_feedback_msg],
-                }
-            else:
-                # Shielding mode: overwrite candidate action with sanitised action
-                # Update tool_calls in last AIMessage if present so environment executes sanitised action
-                updated_messages = []
-                if last_message and hasattr(last_message, "tool_calls") and last_message.tool_calls:
-                    new_tool_calls = []
-                    for tc in last_message.tool_calls:
-                        if tc.get("id") == tool_call_id:
-                            new_tc = dict(tc)
-                            new_tc["args"] = sanitised_args
-                            new_tool_calls.append(new_tc)
-                        else:
-                            new_tool_calls.append(tc)
-                    # We can construct updated AIMessage or let environment read sanitised_action
-                    last_message.tool_calls = new_tool_calls
-
-                return {
-                    "guard_verdict": "VIOLATION",
-                    "guard_feedback": feedback,
-                    "candidate_action": candidate_action,
-                    "sanitised_action": sanitised_action,
-                    "action_history": action_history,
-                    "messages": updated_messages,
-                }
-
-        # Fallback / BYPASS
-        return {
-            "guard_verdict": "BYPASS",
-            "guard_feedback": feedback or "Action bypassed formal gate.",
-            "candidate_action": candidate_action,
-            "sanitised_action": candidate_action,
-            "action_history": action_history,
+            ],
         }
+      else:
+        # Shielding mode: overwrite tool call arguments in the last message
+        if last_msg and getattr(last_msg, "tool_calls", None):
+          for tc in last_msg.tool_calls:
+            if tc.get("id") == tool_call_id:
+              tc["args"] = sanitised_args
+
+        return {
+            "guard_verdict": "VIOLATION",
+            "guard_feedback": feedback,
+            "candidate_action": candidate_action,
+            "sanitised_action": sanitised_action,
+            "action_history": action_history,
+            "messages": [],
+        }
+
+    return {
+        "guard_verdict": "BYPASS",
+        "guard_feedback": feedback or "Bypassed.",
+        "candidate_action": candidate_action,
+        "sanitised_action": candidate_action,
+        "action_history": action_history,
+    }
