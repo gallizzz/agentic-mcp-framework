@@ -22,6 +22,18 @@ from langgraph.graph import END, START, StateGraph
 
 from agent.agent_card import AgentCard, load_agent_card
 from agent.agent_state import AgentState
+from agent.config import (
+    ACTION_MAPPING,
+    ASMETA_MODEL_NAME,
+    DEFAULT_ENVIRONMENT_COMMAND,
+    DEFAULT_MONITORED_VARIABLES,
+    DEFAULT_SAFE_ACTION,
+    ENVIRONMENT_AGENT_CARD_PATH,
+    ERROR_POLICY,
+    GATE_POLICY,
+    GUARD_AGENT_CARD_PATH,
+    MAX_RETRIES,
+)
 from agent.environment_node import create_environment_node
 from agent.formal_gate_node import FormalGateNode
 from agent.planner_node import create_planner_node, planner_router
@@ -167,26 +179,24 @@ async def main():
     )
 
     # Load AsmetaS guard agent-card contract
-    guard_card_path = os.getenv("GUARD_AGENT_CARD_PATH", "mcp_server/asmetas/agent-card.json")
-    asmetas_card = load_agent_card(guard_card_path)
+    asmetas_card = load_agent_card(GUARD_AGENT_CARD_PATH)
     print_info(
         f"Loaded guard card: [bold magenta]{asmetas_card.name}[/bold magenta] "
         f"({asmetas_card.type}, {asmetas_card.protocol}/{asmetas_card.transport})"
     )
 
     # Load environment agent card (or fallback to direct command configuration)
-    env_card_path = os.getenv("ENVIRONMENT_AGENT_CARD_PATH", "mcp_server/vehicle/agent-card.json")
     env_card = None
-    if Path(env_card_path).is_file():
-        env_card = load_agent_card(env_card_path)
+    if ENVIRONMENT_AGENT_CARD_PATH.is_file():
+        env_card = load_agent_card(ENVIRONMENT_AGENT_CARD_PATH)
         print_info(
             f"Loaded environment card: [bold cyan]{env_card.name}[/bold cyan] "
             f"({env_card.type}, {env_card.protocol}/{env_card.transport})"
         )
         env_server_config = env_card.to_mcp_server_config()
     else:
-        env_cmd = os.getenv("ENVIRONMENT_MCP_COMMAND", "python")
-        env_args = os.getenv("ENVIRONMENT_MCP_ARGS", "mcp_server/vehicle/vehicle_mcp_server.py").split()
+        env_cmd = DEFAULT_ENVIRONMENT_COMMAND[0]
+        env_args = DEFAULT_ENVIRONMENT_COMMAND[1:]
         env_server_config = {
             "command": env_cmd,
             "args": env_args,
@@ -250,7 +260,7 @@ async def main():
         print_error("AsmetaS formal service is not available. Chat will NOT be started.")
         sys.exit(1)
 
-    asm_model_name = os.getenv("ASMETA_MODEL_NAME", "SafetyEnforcerModel.asm")
+    asm_model_name = ASMETA_MODEL_NAME
     default_model_path = os.getenv("ASMETA_MODEL_PATH")
 
     # Check that model exists on AsmetaS and service is reachable
@@ -306,17 +316,8 @@ async def main():
         sys.exit(1)
 
     # Action mapping and default monitored variables
-    action_mapping_raw = os.getenv("ACTION_MAPPING", '{"KEEP": "IDLE"}')
-    try:
-        action_mapping = json.loads(action_mapping_raw) if action_mapping_raw else {}
-    except Exception:
-        action_mapping = {}
-
-    default_monitored_raw = os.getenv("DEFAULT_MONITORED_VARIABLES", '{"rightLaneFree": "false"}')
-    try:
-        default_monitored_vars = json.loads(default_monitored_raw) if default_monitored_raw else {}
-    except Exception:
-        default_monitored_vars = {}
+    action_mapping = dict(ACTION_MAPPING)
+    default_monitored_vars = dict(DEFAULT_MONITORED_VARIABLES)
 
     monitored_tools_env = os.getenv("MONITORED_TOOLS")
     monitored_tools = (
@@ -331,10 +332,10 @@ async def main():
         llm=llm,
         environment_tools=environment_tools,
         sanitise_action_tool=sanitise_tool,
-        policy="shielding",
-        error_policy="fail_safe",
+        policy=GATE_POLICY,
+        error_policy=ERROR_POLICY,
         system_prompt=system_prompt,
-        max_retries=3,
+        max_retries=MAX_RETRIES,
         agent_card=asmetas_card,
         action_mapping=action_mapping,
         default_monitored_vars=default_monitored_vars,

@@ -96,17 +96,24 @@ Per uscire dalla sessione digita `exit` oppure `quit`.
 
 ---
 
-## Variabili d'Ambiente (.env)
+## Configurazione (.env e agent/config.py)
+
+### Variabili d'Ambiente (`.env`)
+Solo credenziali di autenticazione e parametri di connessione di rete:
 
 | Variabile | Default | Descrizione |
 | :--- | :--- | :--- |
 | `GEMINI_API_KEY` | *(obbligatoria)* | Chiave API di Google AI Studio. |
 | `GEMINI_MODEL` | `gemini-flash-lite-latest` | Modello LLM per il Planner (consigliato per evitare rate limit). |
 | `ASMETAS_URL` | `http://localhost:8080` | URL del backend REST del simulatore AsmetaS. |
-| `ASMETA_MODEL_NAME` | `SafetyEnforcerModel.asm` | Nome del modello ASM caricato come enforcer formale. |
-| `GUARD_AGENT_CARD_PATH` | `mcp_server/asmetas/agent-card.json` | Percorso dell'Agent Card del guardiano AsmetaS. |
-| `ENVIRONMENT_AGENT_CARD_PATH` | `mcp_server/vehicle/agent-card.json` | Percorso dell'Agent Card dell'ambiente target. |
-| `SYSTEM_PROMPT` | *(generato dinamicamente)* | Override opzionale per il prompt di sistema del Planner. |
+
+### Costanti di Configurazione (`agent/config.py`)
+Tutti i parametri statici, contratti A2A, mappature di dominio e politiche del Formal Gate sono centralizzati in `agent/config.py`:
+* **`ASMETA_MODEL_NAME`**: Nome del modello formale registrato su AsmetaS (`SafetyEnforcerModel.asm`).
+* **`GUARD_AGENT_CARD_PATH`** e **`ENVIRONMENT_AGENT_CARD_PATH`**: Percorsi dei contratti Agent Card JSON.
+* **`ACTION_MAPPING`**: Mappatura tra le azioni candidate dell'ambiente e quelle del modello ASM (`{"KEEP": "IDLE"}`).
+* **`DEFAULT_MONITORED_VARIABLES`**: Valori di default per le variabili sensoriali monitorate.
+* **`GATE_POLICY`** e **`ERROR_POLICY`**: Politiche di shielding e fail-safe del Formal Gate.
 
 ---
 
