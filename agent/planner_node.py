@@ -18,9 +18,9 @@ def build_default_system_prompt(tools: Optional[List[BaseTool]] = None) -> str:
         f"- Se l'utente fa riferimento allo stato dei sensori (es. corsia destra libera o occupata), imposta 'right_lane_free' (True o False).\n"
         f"- Per mantenere la velocità usa 'KEEP' o 'IDLE', per fermarsi 'STOP', per spostarsi 'LANE_RIGHT' o 'LANE_LEFT'.\n"
         f"Tutte le azioni sono sottoposte ad un Formal Gate deterministico basato su specifiche formali AsmetaS (es. regola 'Keep right if right lane free': se la corsia di destra è libera, l'azione viene forzata a LANE_RIGHT per sicurezza).\n"
-        f"IMPORTANTE: Se l'azione richiesta è già stata eseguita dall'ambiente o modificata dal Formal Gate (vedi output del tool), "
-        f"NON richiamare nuovamente il tool in loop. Rispondi direttamente all'utente spiegando sinteticamente l'esito dell'azione "
-        f"e le eventuali modifiche applicate dal Formal Gate per la sicurezza.\n"
+        f"IMPORTANTE:\n"
+        f"- Se il tool riporta un intervento di sicurezza [FORMAL GATE INTERVENTION - SHIELDING APPLIED], DEVI spiegare con precisione all'utente che l'azione originariamente richiesta NON è stata eseguita tal quale, bensì schermata/modificata dal Formal Gate con l'azione sicura indicata, specificando la motivazione fornita dal Formal Gate. È TASSATIVAMENTE VIETATO affermare che l'azione originariamente richiesta ha avuto successo.\n"
+        f"- Se l'azione richiesta è già stata eseguita dall'ambiente, NON richiamare nuovamente il tool in loop. Rispondi direttamente all'utente spiegando sinteticamente l'esito reale dell'azione.\n"
         f"Sii sintetico, chiaro e professionale."
     )
 

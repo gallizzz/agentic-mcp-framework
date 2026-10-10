@@ -34,6 +34,28 @@ class EnvironmentNode:
             })
             result["action_history"] = history
 
+        # Enrich tool message if Formal Gate intervened (shielding applied)
+        guard_verdict = state.get("guard_verdict")
+        guard_feedback = state.get("guard_feedback")
+        candidate_action = state.get("candidate_action")
+        sanitised_action = state.get("sanitised_action")
+
+        if guard_verdict == "VIOLATION" and result.get("messages"):
+            for msg in result["messages"]:
+                original_action_args = candidate_action.get("args") if candidate_action else {}
+                shielded_action_args = sanitised_action.get("args") if sanitised_action else {}
+                msg.content = (
+                    f"[FORMAL GATE INTERVENTION - SHIELDING APPLIED]\n"
+                    f"Azione originariamente proposta dal Planner: {original_action_args}\n"
+                    f"Azione schermata/eseguita per sicurezza: {shielded_action_args}\n"
+                    f"Motivazione del Formal Gate: {guard_feedback}\n"
+                    f"Esito esecuzione nell'ambiente: {msg.content}\n\n"
+                    f"ISTRUZIONE PER LA RISPOSTA: Spiega all'utente in modo trasparente che l'azione richiesta "
+                    f"NON è stata eseguita come desiderato, ma è stata bloccata e sostituita con {shielded_action_args} "
+                    f"dal Formal Gate per la seguente ragione: {guard_feedback}. "
+                    f"Non affermare in nessun caso che l'azione originariamente richiesta ha avuto successo."
+                )
+
         return result
 
 
