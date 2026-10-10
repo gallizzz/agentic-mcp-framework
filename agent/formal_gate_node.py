@@ -26,24 +26,22 @@ class FormalGateNode:
 
     def __init__(
         self,
-        sanitise_action_callable: Optional[Callable] = None,
-        policy: Literal["shielding", "replan"] = "shielding",
-        error_policy: Literal["fail_stop", "fail_safe"] = "fail_stop",
-        default_safe_action: str = "STOP",
-        monitored_tools: Optional[list[str]] = None,
-        agent_card: Optional[AgentCard] = None,
-        action_mapping: Optional[Dict[str, str]] = None,
-        default_monitored_vars: Optional[Dict[str, str]] = None,
+        default_safe_action: str,
+        sanitise_action_callable: Optional[Callable],
+        policy: Literal["shielding", "replan"],
+        error_policy: Literal["fail_stop", "fail_safe"],
+        monitored_tools: Optional[list[str]],
+        agent_card: Optional[AgentCard],
+        action_mapping: Optional[Dict[str, str]],
+        default_monitored_vars: Optional[Dict[str, str]],
     ):
         """
         Args:
             sanitise_action_callable: Async or sync callable to invoke AsmetaS sanitise_action.
-                                      Can be the LangChain StructuredTool or a direct function.
             policy: 'shielding' (sanitise action and proceed) or 'replan' (feedback to LLM).
             error_policy: 'fail_stop' (abort on error) or 'fail_safe' (force default safe action).
             default_safe_action: Fallback action when fail_safe is active.
-            monitored_tools: List of tool names to intercept. If None, intercepts any action with 'inputAction'
-                             or all tool calls.
+            monitored_tools: List of tool names to intercept.
             agent_card: Optional AgentCard contract specification for runtime schema validation.
             action_mapping: Optional mapping between environment action names and formal model actions (e.g. {'KEEP': 'IDLE'}).
             default_monitored_vars: Optional default values for formal model monitored variables.
