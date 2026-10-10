@@ -1,13 +1,14 @@
-"""
-Complete LangGraph Formal Gate Graph implementation.
+"""Complete LangGraph Formal Gate Graph implementation.
 Coordinates Planner (LLM) ---> Formal Gate (AsmetaS) ---> Environment (Action).
 """
+
+from contextlib import asynccontextmanager
 import asyncio
 import json
 import os
+from pathlib import Path
 import sys
 import time
-from pathlib import Path
 from typing import Any, Callable, Dict, List, Literal, Optional
 
 # Ensure project root is in sys.path
@@ -22,6 +23,19 @@ from langgraph.graph import END, START, StateGraph
 
 from agent.agent_card import AgentCard, load_agent_card
 from agent.agent_state import AgentState
+from agent.cli_formatter import (
+    console,
+    get_status_spinner,
+    print_banner,
+    print_divider,
+    print_error,
+    print_info,
+    print_ready_prompt,
+    print_session_end,
+    print_step_update,
+    print_success,
+    print_warning,
+)
 from agent.config import (
     ACTION_MAPPING,
     ASMETA_MODEL_NAME,
@@ -37,52 +51,75 @@ from agent.config import (
 from agent.environment_node import create_environment_node
 from agent.formal_gate_node import FormalGateNode
 from agent.planner_node import create_planner_node, planner_router
-from agent.cli_formatter import (
-    console,
-    print_banner,
-    print_info,
-    print_warning,
-    print_error,
-    print_success,
-    print_ready_prompt,
-    print_divider,
-    print_session_end,
-    print_step_update,
-    get_status_spinner,
-)
 
 # Load environment
 load_dotenv()
 os.environ["TZ"] = "Europe/Rome"
 if hasattr(time, "tzset"):
-    time.tzset()
+  time.tzset()
+
+
+# ============================================================================
+# HELPER FUNCTIONS & ROUTERS
+# ============================================================================
+
+def parse_mcp_response(res: Any) -> tuple[dict, str]:
+  """Parses MCP tool output into (data_dict, raw_text)."""
+  raw_text = ""
+  if isinstance(res, list) and len(res) > 0:
+    first_item = res[0]
+    if isinstance(first_item, dict) and "text" in first_item:
+      raw_text = str(first_item["text"])
+    elif hasattr(first_item, "text"):
+      raw_text = str(first_item.text)
+    elif isinstance(first_item, str):
+      raw_text = first_item
+    else:
+      raw_text = str(first_item)
+  elif isinstance(res, dict):
+    return res, json.dumps(res)
+  elif isinstance(res, str):
+    raw_text = res
+  else:
+    raw_text = str(res)
+
+  try:
+    data = json.loads(raw_text)
+    if isinstance(data, dict):
+      return data, raw_text
+  except Exception:
+    pass
+  return {}, raw_text
 
 
 def create_gate_router(policy: str, max_retries: int = 3):
-    """
-    Routes after Formal Gate evaluation.
-    """
-    def gate_router(state: AgentState) -> str:
-        verdict = state.get("guard_verdict")
+  """Routes after Formal Gate evaluation."""
 
-        if verdict == "APPROVED" or (verdict == "VIOLATION" and policy == "shielding"):
-            # Safe to execute in environment
-            return "environment"
-        elif verdict == "VIOLATION":
-            # Re-planning policy
-            retry_count = state.get("retry_count", 0)
-            if retry_count < max_retries:
-                return "planner"
-            return END
-        elif verdict == "ERROR":
-            return END
-        elif verdict == "BYPASS":
-            return "environment"
+  def gate_router(state: AgentState) -> str:
+    verdict = state.get("guard_verdict")
 
-        return END
+    if verdict == "APPROVED" or (
+        verdict == "VIOLATION" and policy == "shielding"
+    ):
+      return "environment"
+    elif verdict == "VIOLATION":
+      retry_count = state.get("retry_count", 0)
+      if retry_count < max_retries:
+        return "planner"
+      return END
+    elif verdict == "ERROR":
+      return END
+    elif verdict == "BYPASS":
+      return "environment"
 
-    return gate_router
+    return END
 
+  return gate_router
+
+
+# ============================================================================
+# GRAPH BUILDER
+# ============================================================================
 
 def build_formal_gate_graph(
     llm,
@@ -98,295 +135,263 @@ def build_formal_gate_graph(
     default_monitored_vars: Optional[Dict[str, str]],
     monitored_tools: Optional[List[str]],
 ):
-    """
-    Builds the pipeline graph:
-    Planner (LLM) -> Formal Gate (AsmetaS) -> Environment (Action execution).
-    """
-    planner = create_planner_node(llm, environment_tools, system_prompt)
-    formal_gate = FormalGateNode(
-        sanitise_action_callable=sanitise_action_tool,
-        policy=policy,
-        error_policy=error_policy,
-        default_safe_action=default_safe_action,
-        monitored_tools=monitored_tools,
-        agent_card=agent_card,
-        action_mapping=action_mapping,
-        default_monitored_vars=default_monitored_vars,
-    )
-    environment = create_environment_node(environment_tools) if environment_tools else None
+  """Builds the pipeline graph: Planner (LLM) -> Formal Gate (AsmetaS) -> Environment."""
+  planner = create_planner_node(llm, environment_tools, system_prompt)
+  formal_gate = FormalGateNode(
+      sanitise_action_callable=sanitise_action_tool,
+      policy=policy,
+      error_policy=error_policy,
+      default_safe_action=default_safe_action,
+      monitored_tools=monitored_tools,
+      agent_card=agent_card,
+      action_mapping=action_mapping,
+      default_monitored_vars=default_monitored_vars,
+  )
+  environment = (
+      create_environment_node(environment_tools) if environment_tools else None
+  )
 
-    # Graph structure
-    builder = StateGraph(AgentState)
-    builder.add_node("planner", planner)
-    builder.add_node("formal_gate", formal_gate)
-    if environment:
-        builder.add_node("environment", environment)
+  builder = StateGraph(AgentState)
+  builder.add_node("planner", planner)
+  builder.add_node("formal_gate", formal_gate)
+  if environment:
+    builder.add_node("environment", environment)
 
-    # Execution flow and conditional routing
-    builder.add_edge(START, "planner")
-    builder.add_conditional_edges("planner", planner_router)
-    builder.add_conditional_edges("formal_gate", create_gate_router(policy, max_retries))
+  builder.add_edge(START, "planner")
+  builder.add_conditional_edges("planner", planner_router)
+  builder.add_conditional_edges(
+      "formal_gate", create_gate_router(policy, max_retries)
+  )
 
-    if environment:
-        # Loop back to planner so it can summarize execution outcome
-        builder.add_edge("environment", "planner")
+  if environment:
+    builder.add_edge("environment", "planner")
 
-    return builder.compile()
+  return builder.compile()
 
 
-def parse_mcp_response(res: Any) -> tuple[dict, str]:
-    """
-    Parses MCP tool output into (data_dict, raw_text).
-    Handles string JSON, dicts, or lists of content blocks returned by langchain_mcp_adapters.
-    """
-    raw_text = ""
-    if isinstance(res, list) and len(res) > 0:
-        first_item = res[0]
-        if isinstance(first_item, dict) and "text" in first_item:
-            raw_text = str(first_item["text"])
-        elif hasattr(first_item, "text"):
-            raw_text = str(first_item.text)
-        elif isinstance(first_item, str):
-            raw_text = first_item
-        else:
-            raw_text = str(first_item)
-    elif isinstance(res, dict):
-        return res, json.dumps(res)
-    elif isinstance(res, str):
-        raw_text = res
-    else:
-        raw_text = str(res)
+# ============================================================================
+# SETUP & LIFECYCLE MANAGERS
+# ============================================================================
 
-    try:
-        data = json.loads(raw_text)
-        if isinstance(data, dict):
-            return data, raw_text
-    except Exception:
-        pass
-    return {}, raw_text
+async def _verify_and_prepare_asmetas_model(asmetas_tools: List[BaseTool]):
+  """Verifies model presence on AsmetaS web service and uploads it if missing."""
+  list_models_tool = next(
+      (t for t in asmetas_tools if t.name == "list_models"), None
+  )
+  upload_model_tool = next(
+      (t for t in asmetas_tools if t.name == "upload_model"), None
+  )
+  default_model_path = os.getenv("ASMETA_MODEL_PATH")
 
+  if not list_models_tool:
+    return
 
-async def main():
-    """
-    Interactive CLI runner for the Formal Gate Agent.
-    """
-    print_banner()
+  models_info_raw = await list_models_tool.ainvoke({})
+  models_data, models_raw = parse_mcp_response(models_info_raw)
 
-    # Initialize planner model
-    model_name = os.getenv("GEMINI_MODEL", "gemini-flash-lite-latest")
-    print_info(f"Initializing LLM: [bold green]{model_name}[/bold green]")
-    llm = ChatGoogleGenerativeAI(
-        model=model_name,
-        temperature=0.0,
+  if models_data.get("status") == "error":
+    raise RuntimeError(
+        f"AsmetaS web service unreachable: {models_data.get('message', models_raw)}"
     )
 
-    # Load AsmetaS guard agent-card contract
-    asmetas_card = load_agent_card(GUARD_AGENT_CARD_PATH)
-    print_info(
-        f"Loaded guard card: [bold magenta]{asmetas_card.name}[/bold magenta] "
-        f"({asmetas_card.type}, {asmetas_card.protocol}/{asmetas_card.transport})"
-    )
-
-    # Load environment agent card (or fallback to direct command configuration)
-    env_card = None
-    if ENVIRONMENT_AGENT_CARD_PATH.is_file():
-        env_card = load_agent_card(ENVIRONMENT_AGENT_CARD_PATH)
-        print_info(
-            f"Loaded environment card: [bold cyan]{env_card.name}[/bold cyan] "
-            f"({env_card.type}, {env_card.protocol}/{env_card.transport})"
+  server_models = (
+      models_data.get("models", []) if isinstance(models_data, dict) else []
+  )
+  if ASMETA_MODEL_NAME not in server_models:
+    uploaded = False
+    if (
+        upload_model_tool
+        and default_model_path
+        and Path(default_model_path).is_file()
+    ):
+      print_info(
+          f"Model '{ASMETA_MODEL_NAME}' missing on server. Uploading from"
+          f" {default_model_path}..."
+      )
+      upload_res_raw = await upload_model_tool.ainvoke(
+          {"model_path": default_model_path}
+      )
+      upload_data, upload_raw = parse_mcp_response(upload_res_raw)
+      if upload_data.get("status") == "success":
+        print_success(
+            f"Model '{ASMETA_MODEL_NAME}' uploaded successfully to AsmetaS."
         )
-        env_server_config = env_card.to_mcp_server_config()
-    else:
-        env_cmd = DEFAULT_ENVIRONMENT_COMMAND[0]
-        env_args = DEFAULT_ENVIRONMENT_COMMAND[1:]
-        env_server_config = {
-            "command": env_cmd,
-            "args": env_args,
-            "transport": "stdio",
-        }
-        print_info(f"Configured environment server: [bold cyan]{env_cmd} {' '.join(env_args)}[/bold cyan]")
+        uploaded = True
 
-    # Start MCP clients based on agent card configs
-    print_info("Connecting to MCP servers...")
-    asmetas_env = {"ASMETAS_URL": os.getenv("ASMETAS_URL", "http://localhost:8080")}
-    mcp_config = {
-        "environment_server": env_server_config,
-        "asmetas_server": asmetas_card.to_mcp_server_config(env=asmetas_env),
+    if not uploaded:
+      raise RuntimeError(
+          f"Formal model '{ASMETA_MODEL_NAME}' is not present on AsmetaS"
+          " server."
+      )
+  else:
+    print_info(f"Model '{ASMETA_MODEL_NAME}' confirmed on AsmetaS server.")
+
+
+@asynccontextmanager
+async def setup_mcp_and_enforcer_session():
+  """Context manager to initialize MCP servers, validate contracts, start AsmetaS enforcer,
+
+  and handle cleanup gracefully on exit.
+  """
+  # Load Agent Cards & Server Configs
+  asmetas_card = load_agent_card(GUARD_AGENT_CARD_PATH)
+  print_info(
+      f"Loaded guard card: [bold magenta]{asmetas_card.name}[/bold magenta]"
+  )
+
+  if ENVIRONMENT_AGENT_CARD_PATH.is_file():
+    env_card = load_agent_card(ENVIRONMENT_AGENT_CARD_PATH)
+    env_server_config = env_card.to_mcp_server_config()
+  else:
+    env_card = None
+    env_cmd, *env_args = DEFAULT_ENVIRONMENT_COMMAND
+    env_server_config = {
+        "command": env_cmd,
+        "args": env_args,
+        "transport": "stdio",
     }
 
-    client = MultiServerMCPClient(mcp_config)
+  asmetas_env = {
+      "ASMETAS_URL": os.getenv("ASMETAS_URL", "http://localhost:8080")
+  }
+  mcp_config = {
+      "environment_server": env_server_config,
+      "asmetas_server": asmetas_card.to_mcp_server_config(env=asmetas_env),
+  }
 
-    # Fetch tools from servers
-    try:
-        asmetas_tools = await client.get_tools(server_name="asmetas_server")
-    except Exception as e:
-        print_error(f"Failed to connect to AsmetaS MCP server: {e}")
-        print_error("AsmetaS formal service is not available. Chat will NOT be started.")
-        sys.exit(1)
+  client = MultiServerMCPClient(mcp_config)
 
-    try:
-        environment_tools = await client.get_tools(server_name="environment_server")
-    except Exception as e:
-        print_error(f"Failed to connect to Environment server: {e}")
-        print_error("Chat will NOT be started.")
-        sys.exit(1)
+  # Retrieve & Validate Tools
+  try:
+    asmetas_tools = await client.get_tools(server_name="asmetas_server")
+    environment_tools = await client.get_tools(
+        server_name="environment_server"
+    )
+  except Exception as e:
+    print_error(f"Failed to connect to MCP servers: {e}")
+    raise
 
-    # Validate MCP server tools against declared Agent Card skills
-    missing_guard_skills = asmetas_card.validate_mcp_tools(asmetas_tools)
-    if missing_guard_skills:
-        print_error(f"Missing required skills in AsmetaS server contract: {missing_guard_skills}")
-        print_error("AsmetaS server does not satisfy the A2A contract. Chat will NOT be started.")
-        sys.exit(1)
-    else:
-        print_success(f"[A2A] Verified {len(asmetas_card.skills)} skills for '{asmetas_card.name}' contract.")
+  if missing := asmetas_card.validate_mcp_tools(asmetas_tools):
+    raise RuntimeError(
+        f"Missing required skills in AsmetaS contract: {missing}"
+    )
 
-    if env_card:
-        missing_env_skills = env_card.validate_mcp_tools(environment_tools)
-        if missing_env_skills:
-            print_warning(f"Missing skills in Environment server: {missing_env_skills}")
-        else:
-            print_success(f"[A2A] Verified {len(env_card.skills)} skills for '{env_card.name}' contract.")
+  # Model Check & Enforcer Session Start
+  sanitise_tool = next(
+      (t for t in asmetas_tools if t.name == "sanitise_action"), None
+  )
+  start_tool = next(
+      (t for t in asmetas_tools if t.name == "start_enforcer"), None
+  )
+  stop_tool = next(
+      (t for t in asmetas_tools if t.name == "stop_enforcer"), None
+  )
 
-    print_info(f"Environment tools: {[t.name for t in environment_tools]}")
-    print_info(f"Formal guard tools: {[t.name for t in asmetas_tools]}")
+  if not sanitise_tool or not start_tool:
+    raise RuntimeError("Essential Formal Gate tools missing from server.")
 
-    # Resolve AsmetaS tools needed by the formal gate
-    sanitise_tool = next((t for t in asmetas_tools if t.name == "sanitise_action"), None)
-    start_tool = next((t for t in asmetas_tools if t.name == "start_enforcer"), None)
-    stop_tool = next((t for t in asmetas_tools if t.name == "stop_enforcer"), None)
-    list_models_tool = next((t for t in asmetas_tools if t.name == "list_models"), None)
-    upload_model_tool = next((t for t in asmetas_tools if t.name == "upload_model"), None)
+  await _verify_and_prepare_asmetas_model(asmetas_tools)
 
-    if not sanitise_tool or not start_tool:
-        print_error("Essential Formal Gate tools (sanitise_action, start_enforcer) are missing.")
-        print_error("AsmetaS formal service is not available. Chat will NOT be started.")
-        sys.exit(1)
+  init_res_raw = await start_tool.ainvoke({"asm_name": ASMETA_MODEL_NAME})
+  init_data, _ = parse_mcp_response(init_res_raw)
+  if init_data.get("status") == "error":
+    raise RuntimeError(
+        f"Failed to start AsmetaS Enforcer session: {init_data.get('message')}"
+    )
 
-    asm_model_name = ASMETA_MODEL_NAME
-    default_model_path = os.getenv("ASMETA_MODEL_PATH")
+  print_success(
+      f"AsmetaS enforcer session active for '{ASMETA_MODEL_NAME}' (ID:"
+      f" {init_data.get('execution_id', 'OK')})"
+  )
 
-    # Check that model exists on AsmetaS and service is reachable
-    if list_models_tool:
+  try:
+    yield {
+        "asmetas_card": asmetas_card,
+        "environment_tools": environment_tools,
+        "sanitise_tool": sanitise_tool,
+    }
+  finally:
+    if stop_tool:
+      try:
+        await stop_tool.ainvoke({})
+      except Exception:
+        pass
+
+
+# ============================================================================
+# MAIN INTERACTIVE CLI
+# ============================================================================
+
+async def main():
+  print_banner()
+
+  model_name = os.getenv("GEMINI_MODEL", "gemini-flash-lite-latest")
+  print_info(f"Initializing LLM: [bold green]{model_name}[/bold green]")
+  llm = ChatGoogleGenerativeAI(model=model_name, temperature=0.0)
+
+  try:
+    async with setup_mcp_and_enforcer_session() as session:
+      monitored_env = os.getenv("MONITORED_TOOLS")
+      monitored_tools = (
+          [t.strip() for t in monitored_env.split(",") if t.strip()]
+          if monitored_env
+          else None
+      )
+
+      graph = build_formal_gate_graph(
+          llm=llm,
+          environment_tools=session["environment_tools"],
+          sanitise_action_tool=session["sanitise_tool"],
+          policy=GATE_POLICY,
+          error_policy=ERROR_POLICY,
+          default_safe_action=DEFAULT_SAFE_ACTION,
+          system_prompt=os.getenv("SYSTEM_PROMPT"),
+          max_retries=MAX_RETRIES,
+          agent_card=session["asmetas_card"],
+          action_mapping=dict(ACTION_MAPPING),
+          default_monitored_vars=dict(DEFAULT_MONITORED_VARIABLES),
+          monitored_tools=monitored_tools,
+      )
+
+      print_ready_prompt()
+
+      while True:
         try:
-            models_info_raw = await list_models_tool.ainvoke({})
-            models_data, models_raw = parse_mcp_response(models_info_raw)
-            if models_data.get("status") == "error":
-                err_msg = models_data.get("message", models_raw)
-                print_error(f"AsmetaS web service unreachable: {err_msg}")
-                print_error("AsmetaS formal service is not available. Chat will NOT be started.")
-                sys.exit(1)
+          user_input = input("\nYou: ")
+          if not user_input.strip():
+            continue
+          if user_input.strip().lower() in ["exit", "quit"]:
+            break
 
-            server_models = models_data.get("models", []) if isinstance(models_data, dict) else []
-            if asm_model_name not in server_models:
-                uploaded = False
-                if upload_model_tool and default_model_path and Path(default_model_path).is_file():
-                    print_info(f"Model '{asm_model_name}' not found on AsmetaS. Uploading from {default_model_path}...")
-                    upload_res_raw = await upload_model_tool.ainvoke({"model_path": default_model_path})
-                    upload_data, upload_raw = parse_mcp_response(upload_res_raw)
-                    if upload_data.get("status") == "success":
-                        print_success(f"Model '{asm_model_name}' uploaded successfully to AsmetaS.")
-                        uploaded = True
-                    else:
-                        print_warning(f"Upload failed: {upload_data.get('message', upload_raw)}")
+          initial_state = {
+              "messages": [HumanMessage(content=user_input)],
+              "candidate_action": None,
+              "monitored_variables": {},
+              "guard_verdict": None,
+              "sanitised_action": None,
+              "guard_feedback": None,
+              "retry_count": 0,
+              "max_retries": 3,
+              "execution_id": None,
+              "action_history": [],
+          }
 
-                if not uploaded:
-                    print_error(f"Formal model '{asm_model_name}' is not present on AsmetaS server.")
-                    print_error("Make sure the model resides in AsmetaS-web-service. Chat will NOT be started.")
-                    sys.exit(1)
-            else:
-                print_info(f"Model '{asm_model_name}' confirmed on AsmetaS server.")
+          with get_status_spinner("Running agent..."):
+            async for step_output in graph.astream(initial_state):
+              print_step_update(step_output)
+
+          print_divider()
+        except (KeyboardInterrupt, EOFError):
+          break
         except Exception as e:
-            print_error(f"Connection to AsmetaS-web-service failed: {e}")
-            print_error("AsmetaS formal service is not available. Chat will NOT be started.")
-            sys.exit(1)
+          print_error(f"Execution error: {e}")
 
-    # Start enforcer session on AsmetaS (fail-fast if unreachable)
-    try:
-        init_res_raw = await start_tool.ainvoke({"asm_name": asm_model_name})
-        init_data, init_raw = parse_mcp_response(init_res_raw)
-        if init_data.get("status") == "error":
-            err_msg = init_data.get("message", init_raw)
-            print_error(f"Failed to start AsmetaS Enforcer session: {err_msg}")
-            print_error("AsmetaS formal service is not available. Chat will NOT be started.")
-            sys.exit(1)
-
-        exec_id = init_data.get("execution_id", "OK")
-        print_success(f"AsmetaS enforcer ready for '{asm_model_name}' (session ID: {exec_id})")
-    except Exception as e:
-        print_error(f"AsmetaS Enforcer startup failed: {e}")
-        print_error("AsmetaS formal service is not available. Chat will NOT be started.")
-        sys.exit(1)
-
-    # Action mapping and default monitored variables
-    action_mapping = dict(ACTION_MAPPING)
-    default_monitored_vars = dict(DEFAULT_MONITORED_VARIABLES)
-
-    monitored_tools_env = os.getenv("MONITORED_TOOLS")
-    monitored_tools = (
-        [t.strip() for t in monitored_tools_env.split(",") if t.strip()]
-        if monitored_tools_env
-        else None
-    )
-
-    system_prompt = os.getenv("SYSTEM_PROMPT")
-
-    graph = build_formal_gate_graph(
-        llm=llm,
-        environment_tools=environment_tools,
-        sanitise_action_tool=sanitise_tool,
-        policy=GATE_POLICY,
-        error_policy=ERROR_POLICY,
-        default_safe_action=DEFAULT_SAFE_ACTION,
-        system_prompt=system_prompt,
-        max_retries=MAX_RETRIES,
-        agent_card=asmetas_card,
-        action_mapping=action_mapping,
-        default_monitored_vars=default_monitored_vars,
-        monitored_tools=monitored_tools,
-    )
-
-    print_ready_prompt()
-
-    try:
-        while True:
-            try:
-                user_input = input("\nYou: ")
-                if not user_input.strip():
-                    continue
-                if user_input.strip().lower() in ["exit", "quit"]:
-                    break
-
-                initial_state = {
-                    "messages": [HumanMessage(content=user_input)],
-                    "candidate_action": None,
-                    "monitored_variables": {},
-                    "guard_verdict": None,
-                    "sanitised_action": None,
-                    "guard_feedback": None,
-                    "retry_count": 0,
-                    "max_retries": 3,
-                    "execution_id": None,
-                    "action_history": [],
-                }
-
-                with get_status_spinner("Running agent..."):
-                    async for step_output in graph.astream(initial_state):
-                        print_step_update(step_output)
-
-                print_divider()
-            except (KeyboardInterrupt, EOFError):
-                break
-            except Exception as e:
-                print_error(f"Execution error: {e}")
-    finally:
-        if stop_tool:
-            try:
-                await stop_tool.ainvoke({})
-            except Exception:
-                pass
-        print_session_end()
+  except Exception as err:
+    print_error(f"Initialization or Session Error: {err}")
+    sys.exit(1)
+  finally:
+    print_session_end()
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
-
+  asyncio.run(main())
