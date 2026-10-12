@@ -15,38 +15,6 @@
       }
     },
     {
-      "name": "upload_model",
-      "description": "Uploads an ASM model file to the AsmetaS runtime server and ensures required standard libraries are uploaded.",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "model_path": {
-            "type": "string",
-            "description": "Local path to the .asm model file to upload."
-          }
-        },
-        "required": [
-          "model_path"
-        ]
-      }
-    },
-    {
-      "name": "upload_library",
-      "description": "Uploads an ASM library file (e.g. StandardLibrary.asm) to the AsmetaS runtime server.",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "library_path": {
-            "type": "string",
-            "description": "Local path to the .asm library file to upload."
-          }
-        },
-        "required": [
-          "library_path"
-        ]
-      }
-    },
-    {
       "name": "delete_model",
       "description": "Deletes an ASM model from the AsmetaS runtime server.",
       "parameters": {

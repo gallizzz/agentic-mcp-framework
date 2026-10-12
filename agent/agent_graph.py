@@ -173,15 +173,11 @@ def build_formal_gate_graph(
 # SETUP & LIFECYCLE MANAGERS
 # ============================================================================
 
-async def _verify_and_prepare_asmetas_model(asmetas_tools: List[BaseTool]):
-  """Verifies model presence on AsmetaS web service and uploads it if missing."""
+async def _verify_asmetas_model(asmetas_tools: List[BaseTool]):
+  """Verifies that the formal model is already available on the AsmetaS web service."""
   list_models_tool = next(
       (t for t in asmetas_tools if t.name == "list_models"), None
   )
-  upload_model_tool = next(
-      (t for t in asmetas_tools if t.name == "upload_model"), None
-  )
-  default_model_path = os.getenv("ASMETA_MODEL_PATH")
 
   if not list_models_tool:
     return
@@ -198,33 +194,11 @@ async def _verify_and_prepare_asmetas_model(asmetas_tools: List[BaseTool]):
       models_data.get("models", []) if isinstance(models_data, dict) else []
   )
   if ASMETA_MODEL_NAME not in server_models:
-    uploaded = False
-    if (
-        upload_model_tool
-        and default_model_path
-        and Path(default_model_path).is_file()
-    ):
-      print_info(
-          f"Model '{ASMETA_MODEL_NAME}' missing on server. Uploading from"
-          f" {default_model_path}..."
-      )
-      upload_res_raw = await upload_model_tool.ainvoke(
-          {"model_path": default_model_path}
-      )
-      upload_data, upload_raw = parse_mcp_response(upload_res_raw)
-      if upload_data.get("status") == "success":
-        print_success(
-            f"Model '{ASMETA_MODEL_NAME}' uploaded successfully to AsmetaS."
-        )
-        uploaded = True
-
-    if not uploaded:
-      raise RuntimeError(
-          f"Formal model '{ASMETA_MODEL_NAME}' is not present on AsmetaS"
-          " server."
-      )
-  else:
-    print_info(f"Model '{ASMETA_MODEL_NAME}' confirmed on AsmetaS server.")
+    raise RuntimeError(
+        f"Formal model '{ASMETA_MODEL_NAME}' is not present on AsmetaS"
+        " server. Load it on the web service before starting the agent."
+    )
+  print_info(f"Model '{ASMETA_MODEL_NAME}' confirmed on AsmetaS server.")
 
 
 @asynccontextmanager
@@ -290,7 +264,7 @@ async def setup_mcp_and_enforcer_session():
   if not sanitise_tool or not start_tool:
     raise RuntimeError("Essential Formal Gate tools missing from server.")
 
-  await _verify_and_prepare_asmetas_model(asmetas_tools)
+  await _verify_asmetas_model(asmetas_tools)
 
   init_res_raw = await start_tool.ainvoke({"asm_name": ASMETA_MODEL_NAME})
   init_data, _ = parse_mcp_response(init_res_raw)
