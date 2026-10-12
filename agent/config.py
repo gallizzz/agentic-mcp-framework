@@ -1,6 +1,5 @@
-"""
-Central configuration constants for the Formal Gate Agent framework.
-"""
+"""Central configuration constants for the Formal Gate Agent framework."""
+
 from pathlib import Path
 
 # Name of the ASM model registered on AsmetaS-web-service

@@ -1,14 +1,12 @@
+"""Environment execution node for LangGraph.
+
+LangGraph environment node for dispatching verified actions to MCP tools
 """
-Environment execution node for LangGraph.
-Dispatches verified actions to connected environment tools (MCP actuators)
-and tracks execution status in state.
-"""
+
 from typing import Any, Dict, List, Optional
 from langchain_core.tools import BaseTool
 from langgraph.prebuilt import ToolNode
-
 from agent.agent_state import AgentState
-
 
 class EnvironmentNode:
     """Executes validated environment actions and logs execution records."""
@@ -57,7 +55,6 @@ class EnvironmentNode:
                 )
 
         return result
-
 
 def create_environment_node(tools: Optional[List[BaseTool]] = None) -> EnvironmentNode:
     return EnvironmentNode(tools=tools)

@@ -13,7 +13,6 @@ from agent.agent_card import AgentCard, SanitiseContractResult
 from agent.agent_state import AgentState
 logger = logging.getLogger("formal_gate")
 
-
 # ============================================================================
 # HELPER FUNCTIONS
 # ============================================================================
@@ -152,7 +151,6 @@ async def _invoke_sanitise_callable(
     return "ERROR", None, f"A2A Contract Schema Error: {err_msg}", {}
   except Exception as e:
     return "ERROR", None, f"Enforcer exception: {str(e)}", {}
-
 
 # ============================================================================
 # FORMAL GATE NODE CLASS

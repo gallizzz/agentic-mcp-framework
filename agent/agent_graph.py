@@ -1,6 +1,6 @@
-"""Complete LangGraph Formal Gate Graph implementation.
-Coordinates Planner (LLM) ---> Formal Gate (AsmetaS) ---> Environment (Action).
-"""
+"""The graph-based orchestrator for LangGraph.
+
+LangGraph execution pipeline coordinating Planner, Formal Gate, and Environment nodes."""
 
 from contextlib import asynccontextmanager
 import asyncio
@@ -10,17 +10,13 @@ from pathlib import Path
 import sys
 import time
 from typing import Any, Callable, Dict, List, Literal, Optional
-
-# Ensure project root is in sys.path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
 from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage
 from langchain_core.tools import BaseTool
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from langgraph.graph import END, START, StateGraph
-
 from agent.agent_card import AgentCard, load_agent_card
 from agent.agent_state import AgentState
 from agent.cli_formatter import (
@@ -51,13 +47,10 @@ from agent.config import (
 from agent.environment_node import create_environment_node
 from agent.formal_gate_node import FormalGateNode
 from agent.planner_node import create_planner_node, planner_router
-
-# Load environment
 load_dotenv()
 os.environ["TZ"] = "Europe/Rome"
 if hasattr(time, "tzset"):
   time.tzset()
-
 
 # ============================================================================
 # HELPER FUNCTIONS & ROUTERS
@@ -116,7 +109,6 @@ def create_gate_router(policy: str, max_retries: int = 3):
 
   return gate_router
 
-
 # ============================================================================
 # GRAPH BUILDER
 # ============================================================================
@@ -168,7 +160,6 @@ def build_formal_gate_graph(
 
   return builder.compile()
 
-
 # ============================================================================
 # SETUP & LIFECYCLE MANAGERS
 # ============================================================================
@@ -199,7 +190,6 @@ async def _verify_asmetas_model(asmetas_tools: List[BaseTool]):
         " server. Load it on the web service before starting the agent."
     )
   print_info(f"Model '{ASMETA_MODEL_NAME}' confirmed on AsmetaS server.")
-
 
 @asynccontextmanager
 async def setup_mcp_and_enforcer_session():
@@ -290,7 +280,6 @@ async def setup_mcp_and_enforcer_session():
         await stop_tool.ainvoke({})
       except Exception:
         pass
-
 
 # ============================================================================
 # MAIN INTERACTIVE CLI

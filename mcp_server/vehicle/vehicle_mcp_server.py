@@ -1,20 +1,19 @@
+"""The vehicle actuator MCP server.
+
+This server simulates a vehicle actuator environment, exposing tools for executing driving control actions and retrieving telemetry data.
+"""
+
 import logging
 import os
 import time
-
-# Suppress internal MCP server request info logs
 logging.getLogger("mcp").setLevel(logging.WARNING)
-
 try:
     from mcp.server.mcpserver import MCPServer
 except ModuleNotFoundError:
     from mcp.server.fastmcp import FastMCP as MCPServer
-
 import json
 from pathlib import Path
 from typing import Optional
-
-# Set timezone to Rome
 os.environ["TZ"] = "Europe/Rome"
 if hasattr(time, "tzset"):
     time.tzset()
@@ -30,6 +29,9 @@ DEFAULT_STATE = {
     "right_lane_free": False,
 }
 
+# ============================================================================
+# HELPER FUNCTIONS
+# ============================================================================
 
 def load_vehicle_state() -> dict:
     if STATE_FILE.is_file():
@@ -40,7 +42,6 @@ def load_vehicle_state() -> dict:
             pass
     return dict(DEFAULT_STATE)
 
-
 def save_vehicle_state(state: dict) -> None:
     try:
         with open(STATE_FILE, "w") as f:
@@ -48,20 +49,14 @@ def save_vehicle_state(state: dict) -> None:
     except Exception as e:
         logging.warning(f"Could not persist vehicle state: {e}")
 
+# ============================================================================
+# MCP TOOLS DEFINITION
+# ============================================================================
 
 @mcp.tool()
-def execute_vehicle_action(
-    action: str, 
-    speed_delta: Optional[int] = None, 
-    right_lane_free: Optional[bool] = None
-) -> str:
+def execute_vehicle_action(action: str, speed_delta: Optional[int] = None, right_lane_free: Optional[bool] = None) -> str:
     """
     Executes a driving control action on the vehicle actuator in the environment.
-
-    Args:
-        action: The command to execute (e.g. 'FASTER', 'SLOWER', 'KEEP', 'IDLE', 'CHANGE_LANE', 'LANE_RIGHT', 'LANE_LEFT', 'STOP').
-        speed_delta: Amount of speed change in km/h (optional, default is 20 km/h).
-        right_lane_free: Sensor reading indicating whether the right lane is free.
     """
     vehicle_state = load_vehicle_state()
     action_upper = action.strip().upper()
@@ -97,7 +92,6 @@ def execute_vehicle_action(
         f"New speed: {vehicle_state['speed']} km/h, Lane: {vehicle_state['lane']}."
     )
 
-
 @mcp.tool()
 def get_vehicle_telemetry() -> str:
     """
@@ -110,7 +104,6 @@ def get_vehicle_telemetry() -> str:
         f"Right Lane Free: {vehicle_state['right_lane_free']}, "
         f"Last Action: {vehicle_state['last_action']}."
     )
-
 
 if __name__ == "__main__":
     mcp.run()

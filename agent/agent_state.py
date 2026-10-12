@@ -1,11 +1,12 @@
+"""State definition for LangGraph.
+
+Describes the structure of the agent's state.
 """
-State definition for the Shielded LangGraph Agent.
-"""
+
 from typing import Annotated, Any, Dict, List, Literal, Optional
 from typing_extensions import TypedDict
 from langchain_core.messages import AnyMessage
 from langgraph.graph.message import add_messages
-
 
 class AgentState(TypedDict):
     """
@@ -43,7 +44,6 @@ class AgentState(TypedDict):
 
     # Audit history of actions and formal gate interventions
     action_history: List[Dict[str, Any]]
-
 
 # Backward compatibility alias
 FormalAgentState = AgentState

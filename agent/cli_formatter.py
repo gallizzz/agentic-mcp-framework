@@ -1,7 +1,8 @@
-"""
-CLI Formatter and Terminal UI Renderer for the Formal Gate Agent.
+"""CLI Formatter and Terminal UI Renderer for the Formal Gate Agent.
+
 Handles Rich styling, step rendering, text extraction, and status banners.
 """
+
 import time
 from typing import Any, Dict
 from rich.console import Console
@@ -9,7 +10,6 @@ from rich.markdown import Markdown
 from rich.panel import Panel
 
 console = Console()
-
 
 def extract_text_content(content: Any) -> str:
     """
@@ -31,7 +31,6 @@ def extract_text_content(content: Any) -> str:
         return str(content["text"]).strip()
     return str(content).strip()
 
-
 def print_banner():
     console.print(
         Panel.fit(
@@ -41,26 +40,21 @@ def print_banner():
         )
     )
 
-
 def print_info(message: str, prefix_time: bool = True):
     ts = f"[{time.strftime('%X')}] " if prefix_time else ""
     console.print(f"{ts}{message}", style="dim")
-
 
 def print_warning(message: str, prefix_time: bool = True):
     ts = f"[{time.strftime('%X')}] " if prefix_time else ""
     console.print(f"{ts}{message}", style="yellow")
 
-
 def print_error(message: str, prefix_time: bool = True):
     ts = f"[{time.strftime('%X')}] " if prefix_time else ""
     console.print(f"{ts}{message}", style="bold red")
 
-
 def print_success(message: str, prefix_time: bool = True):
     ts = f"[{time.strftime('%X')}] " if prefix_time else ""
     console.print(f"{ts}{message}", style="green")
-
 
 def print_ready_prompt():
     console.print(
@@ -69,21 +63,17 @@ def print_ready_prompt():
     )
     console.print("Type your requests below. Type 'exit' or 'quit' to terminate.", style="dim")
 
-
 def print_divider():
     console.print("-" * 40, style="dim")
 
-
 def print_session_end():
     console.print(f"\n[{time.strftime('%X')}] Session terminated.", style="dim")
-
 
 def get_status_spinner(message: str = "Processing..."):
     return console.status(
         f"[bold green][{time.strftime('%X')}] {message}",
         spinner="dots",
     )
-
 
 def print_step_update(step_data: Dict[str, Any]):
     timestamp = time.strftime("%X")

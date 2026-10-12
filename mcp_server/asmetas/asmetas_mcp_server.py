@@ -1,13 +1,15 @@
+"""The AsmetaS MCP server for formal verification.
+
+Provides a set of MCP tools for interacting with the AsmetaS formal verification engine.
+"""
+
 import logging
 import os
 import json
 from pathlib import Path
 from typing import Any
 import httpx
-
-# Suppress internal MCP server request info logs
 logging.getLogger("mcp").setLevel(logging.WARNING)
-
 try:
     from mcp.server.mcpserver import MCPServer
 except ModuleNotFoundError:
@@ -17,17 +19,18 @@ mcp = MCPServer("asmetas-formal-guard")
 
 ASMETAS_URL = os.getenv("ASMETAS_URL", "http://localhost:8080").rstrip("/")
 
-# Global execution state for the active enforcer instance with file persistence
 current_execution_id: str | None = None
 SESSION_FILE = Path(os.getenv("ASMETAS_SESSION_FILE", "/tmp/asmetas_session.json"))
 
+# ============================================================================
+# HELPER FUNCTIONS
+# ============================================================================
 
 def _is_valid_id(val: Any) -> bool:
     try:
         return int(val) > 0
     except (ValueError, TypeError):
         return False
-
 
 def _load_execution_id() -> str | None:
     global current_execution_id
@@ -48,7 +51,6 @@ def _load_execution_id() -> str | None:
     current_execution_id = None
     return None
 
-
 def _save_execution_id(exec_id: str, model_name: str | None = None) -> None:
     global current_execution_id
     if not _is_valid_id(exec_id):
@@ -61,7 +63,6 @@ def _save_execution_id(exec_id: str, model_name: str | None = None) -> None:
     except Exception as e:
         logging.warning(f"Could not save session file {SESSION_FILE}: {e}")
 
-
 def _clear_execution_id() -> None:
     global current_execution_id
     current_execution_id = None
@@ -70,7 +71,6 @@ def _clear_execution_id() -> None:
             SESSION_FILE.unlink(missing_ok=True)
         except Exception:
             pass
-
 
 async def _cleanup_all_running_models(client: httpx.AsyncClient) -> None:
     try:
@@ -85,6 +85,9 @@ async def _cleanup_all_running_models(client: httpx.AsyncClient) -> None:
     except Exception as e:
         logging.warning(f"Failed to query or clean running models: {e}")
 
+# ============================================================================
+# MCP TOOLS DEFINITION
+# ============================================================================
 
 @mcp.tool()
 async def list_models() -> str:
@@ -108,9 +111,6 @@ async def list_models() -> str:
 async def delete_model(asm_name: str) -> str:
     """
     Deletes an ASM model from the AsmetaS server.
-
-    Args:
-        asm_name: Name of the ASM model to delete (e.g. 'SafetyEnforcerModel.asm').
     """
     url = f"{ASMETAS_URL}/delete-model"
     params = {"name": asm_name}
@@ -133,9 +133,6 @@ async def delete_model(asm_name: str) -> str:
 async def start_enforcer(asm_name: str) -> str:
     """
     Starts the AsmetaS enforcer for the specified ASM model.
-
-    Args:
-        asm_name: Name of the ASM model to start (e.g. 'SafetyEnforcerModel.asm')
     """
     global current_execution_id
     url = f"{ASMETAS_URL}/start"
@@ -190,10 +187,6 @@ async def start_enforcer(asm_name: str) -> str:
 async def sanitise_action(monitored_variables: dict) -> str:
     """
     Evaluates and sanitises a proposed action against the formal ASM guard rules.
-
-    Args:
-        monitored_variables: Dictionary containing inputAction and environment state variables.
-                            Example: {"inputAction": "FASTER", "rightLaneFree": "false"}
     """
     exec_id = _load_execution_id()
     default_model = os.getenv("ASMETA_MODEL_NAME", "SafetyEnforcerModel.asm")
@@ -318,7 +311,6 @@ async def stop_enforcer() -> str:
                 "status": "warning",
                 "message": f"Attempted to stop enforcer session '{exec_id}', HTTP warning: {str(e)}"
             }, indent=2)
-
 
 if __name__ == "__main__":
     mcp.run()
