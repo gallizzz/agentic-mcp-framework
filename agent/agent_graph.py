@@ -20,7 +20,6 @@ from langgraph.graph import END, START, StateGraph
 from agent.agent_card import AgentCard, load_agent_card
 from agent.agent_state import AgentState
 from agent.cli_formatter import (
-    console,
     get_status_spinner,
     print_banner,
     print_divider,
@@ -30,7 +29,6 @@ from agent.cli_formatter import (
     print_session_end,
     print_step_update,
     print_success,
-    print_warning,
 )
 from agent.config import (
     ACTION_MAPPING,
@@ -83,7 +81,6 @@ def parse_mcp_response(res: Any) -> tuple[dict, str]:
   except Exception:
     pass
   return {}, raw_text
-
 
 def create_gate_router(policy: str, max_retries: int = 3):
   """Routes after Formal Gate evaluation."""
