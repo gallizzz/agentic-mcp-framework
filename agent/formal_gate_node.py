@@ -1,7 +1,6 @@
 """Formal Gate Node for LangGraph.
 
-Intercepts proposed actions, communicates with AsmetaS via MCP, and enforces
-runtime formal verification and action sanitisation.
+LangGraph node for runtime action sanitisation via AsmetaS MCP server.
 """
 
 import json
@@ -10,10 +9,8 @@ import re
 from typing import Any, Callable, Dict, Literal, Optional, Tuple
 from langchain_core.messages import ToolMessage
 from pydantic import ValidationError
-
 from agent.agent_card import AgentCard, SanitiseContractResult
 from agent.agent_state import AgentState
-
 logger = logging.getLogger("formal_gate")
 
 
@@ -21,14 +18,12 @@ logger = logging.getLogger("formal_gate")
 # HELPER FUNCTIONS
 # ============================================================================
 
-
 def _to_camel_case(snake_str: str) -> str:
   """Converts snake_case to camelCase."""
   if "_" not in snake_str:
     return snake_str
   parts = snake_str.split("_")
   return parts[0] + "".join(p.capitalize() for p in parts[1:])
-
 
 def _extract_candidate_action(
     state: AgentState, last_msg: Any
@@ -50,7 +45,6 @@ def _extract_candidate_action(
     tool_call_id = tool_call_id or candidate.get("id", "call_default")
 
   return candidate, tool_call_id
-
 
 def _extract_monitored_variables(
     tool_args: dict,
@@ -105,7 +99,6 @@ def _extract_monitored_variables(
     monitored_vars["inputAction"] = action_mapping[act]
 
   return monitored_vars
-
 
 async def _invoke_sanitise_callable(
     callable_obj: Any, monitored_vars: dict
@@ -164,7 +157,6 @@ async def _invoke_sanitise_callable(
 # ============================================================================
 # FORMAL GATE NODE CLASS
 # ============================================================================
-
 
 class FormalGateNode:
   """Deterministic gate for runtime action sanitisation via AsmetaS."""
