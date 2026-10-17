@@ -54,29 +54,20 @@ if hasattr(time, "tzset"):
 
 def parse_mcp_response(res: Any) -> tuple[dict, str]:
   """Parses MCP tool output into (data_dict, raw_text)."""
-  raw_text = ""
-  if isinstance(res, list) and len(res) > 0:
-    first_item = res[0]
-    if isinstance(first_item, dict) and "text" in first_item:
-      raw_text = str(first_item["text"])
-    elif hasattr(first_item, "text"):
-      raw_text = str(first_item.text)
-    elif isinstance(first_item, str):
-      raw_text = first_item
-    else:
-      raw_text = str(first_item)
-  elif isinstance(res, dict):
+  if isinstance(res, dict):
     return res, json.dumps(res)
-  elif isinstance(res, str):
-    raw_text = res
+
+  if isinstance(res, list) and res:
+    item = res[0]
+    raw_text = item.get("text", "") if isinstance(item, dict) else getattr(item, "text", str(item))
   else:
-    raw_text = str(res)
+    raw_text = str(res) if res is not None else ""
 
   try:
     data = json.loads(raw_text)
     if isinstance(data, dict):
       return data, raw_text
-  except Exception:
+  except (json.JSONDecodeError, TypeError):
     pass
   return {}, raw_text
 

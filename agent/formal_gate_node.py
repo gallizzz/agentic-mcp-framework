@@ -123,19 +123,11 @@ async def _invoke_sanitise_callable(
     )
 
   try:
-    if hasattr(callable_obj, "ainvoke"):
-      res = await callable_obj.ainvoke({"monitored_variables": monitored_vars})
-    elif hasattr(callable_obj, "invoke"):
-      res = callable_obj.invoke({"monitored_variables": monitored_vars})
-    else:
-      res = (
-          await callable_obj(monitored_vars)
-          if hasattr(callable_obj(monitored_vars), "__await__")
-          else callable_obj(monitored_vars)
-      )
+    res = await callable_obj.ainvoke({"monitored_variables": monitored_vars})
 
     if isinstance(res, list) and res:
-      res = res[0].get("text", "") if isinstance(res[0], dict) else res[0]
+      item = res[0]
+      res = item.get("text", "") if isinstance(item, dict) else getattr(item, "text", str(item))
 
     res_data = json.loads(res) if isinstance(res, str) else res
     if not isinstance(res_data, dict):
