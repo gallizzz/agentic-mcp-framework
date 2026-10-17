@@ -8,10 +8,21 @@ import logging
 import re
 from typing import Any, Callable, Dict, Literal, Optional, Tuple
 from langchain_core.messages import ToolMessage
-from pydantic import ValidationError
-from agent.agent_card import AgentCard, SanitiseContractResult
+from pydantic import BaseModel, Field, ValidationError
 from agent.agent_state import AgentState
 logger = logging.getLogger("formal_gate")
+
+# ============================================================================
+# RESPONSE SCHEMAS
+# ============================================================================
+
+class SanitiseResult(BaseModel):
+  """Validation schema for AsmetaS sanitise_action tool response."""
+  verdict: Literal["APPROVED", "VIOLATION", "ERROR"]
+  input_action: Optional[str] = None
+  sanitised_action: Optional[str] = None
+  feedback: str = ""
+  raw_output: Optional[Dict[str, Any]] = Field(default_factory=dict)
 
 # ============================================================================
 # HELPER FUNCTIONS
@@ -102,7 +113,7 @@ def _extract_monitored_variables(
 async def _invoke_sanitise_callable(
     callable_obj: Any, monitored_vars: dict
 ) -> Tuple[str, Optional[str], str, dict]:
-  """Invokes AsmetaS callable and validates response against A2A contract schema."""
+  """Invokes AsmetaS sanitise_action MCP tool and validates response structure."""
   if callable_obj is None:
     return (
         "BYPASS",
@@ -138,7 +149,7 @@ async def _invoke_sanitise_callable(
           {},
       )
 
-    validated = SanitiseContractResult.model_validate(res_data)
+    validated = SanitiseResult.model_validate(res_data)
     return (
         validated.verdict,
         validated.sanitised_action,
@@ -148,7 +159,7 @@ async def _invoke_sanitise_callable(
 
   except ValidationError as val_err:
     err_msg = val_err.errors()[0]["msg"] if val_err.errors() else str(val_err)
-    return "ERROR", None, f"A2A Contract Schema Error: {err_msg}", {}
+    return "ERROR", None, f"Sanitise response schema error: {err_msg}", {}
   except Exception as e:
     return "ERROR", None, f"Enforcer exception: {str(e)}", {}
 
@@ -166,7 +177,6 @@ class FormalGateNode:
       policy: Literal["shielding", "replan"] = "shielding",
       error_policy: Literal["fail_stop", "fail_safe"] = "fail_safe",
       monitored_tools: Optional[list[str]] = None,
-      agent_card: Optional[AgentCard] = None,
       action_mapping: Optional[Dict[str, str]] = None,
       default_monitored_vars: Optional[Dict[str, str]] = None,
   ):
@@ -175,7 +185,6 @@ class FormalGateNode:
     self.error_policy = error_policy
     self.default_safe_action = default_safe_action
     self.monitored_tools = monitored_tools
-    self.agent_card = agent_card
     self.action_mapping = dict(action_mapping or {})
     self.default_monitored_vars = dict(default_monitored_vars or {})
 

@@ -108,9 +108,9 @@ Solo credenziali di autenticazione e parametri di connessione di rete:
 | `ASMETAS_URL` | `http://localhost:8080` | URL del backend REST del simulatore AsmetaS. |
 
 ### Costanti di Configurazione (`agent/config.py`)
-Tutti i parametri statici, contratti A2A, mappature di dominio e politiche del Formal Gate sono centralizzati in `agent/config.py`:
+Tutti i parametri statici, configurazioni dei server MCP, mappature di dominio e politiche del Formal Gate sono centralizzati in `agent/config.py`:
 * **`ASMETA_MODEL_NAME`**: Nome del modello formale registrato su AsmetaS (`SafetyEnforcerModel.asm`).
-* **`GUARD_AGENT_CARD_PATH`** e **`ENVIRONMENT_AGENT_CARD_PATH`**: Percorsi dei contratti Agent Card JSON.
+* **`ASMETAS_MCP_COMMAND`** e **`ENVIRONMENT_MCP_COMMAND`**: Comandi di esecuzione stdio per i server MCP (AsmetaS guard e ambiente).
 * **`ACTION_MAPPING`**: Mappatura tra le azioni candidate dell'ambiente e quelle del modello ASM (`{"KEEP": "IDLE"}`).
 * **`DEFAULT_MONITORED_VARIABLES`**: Valori di default per le variabili sensoriali monitorate.
 * **`GATE_POLICY`** e **`ERROR_POLICY`**: Politiche di shielding e fail-safe del Formal Gate.
@@ -122,7 +122,6 @@ Tutti i parametri statici, contratti A2A, mappature di dominio e politiche del F
 Tutti i dettagli teorici, le specifiche formali di sicurezza e le guide per estendere il framework ad altri domini sono disponibili nella Wiki:
 
 * [Architettura & Framework](https://github.com/gallizzz/agentic-mcp-framework/wiki/Architettura-&-Framework)
-* [Federazione A2A e Contratti](https://github.com/gallizzz/agentic-mcp-framework/wiki/Federazione-A2A-e-Contratti)
 * [Formal Verification con AsmetaS](https://github.com/gallizzz/agentic-mcp-framework/wiki/Formal-Verification-con-AsmetaS)
 * [Integrazioni e Nuovi Domini](https://github.com/gallizzz/agentic-mcp-framework/wiki/Integrazioni)
 * [Esempi e Scenari](https://github.com/gallizzz/agentic-mcp-framework/wiki/Esempi-‐-Veicolo)
