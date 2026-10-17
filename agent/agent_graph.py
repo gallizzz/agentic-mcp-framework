@@ -17,7 +17,6 @@ from langchain_core.tools import BaseTool
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from langgraph.graph import END, START, StateGraph
-from agent.agent_card import AgentCard, load_agent_card
 from agent.agent_state import AgentState
 from agent.cli_formatter import (
     get_status_spinner,
@@ -33,13 +32,12 @@ from agent.cli_formatter import (
 from agent.config import (
     ACTION_MAPPING,
     ASMETA_MODEL_NAME,
-    DEFAULT_ENVIRONMENT_COMMAND,
+    ASMETAS_MCP_COMMAND,
     DEFAULT_MONITORED_VARIABLES,
     DEFAULT_SAFE_ACTION,
-    ENVIRONMENT_AGENT_CARD_PATH,
+    ENVIRONMENT_MCP_COMMAND,
     ERROR_POLICY,
     GATE_POLICY,
-    GUARD_AGENT_CARD_PATH,
     MAX_RETRIES,
 )
 from agent.environment_node import create_environment_node
@@ -56,29 +54,20 @@ if hasattr(time, "tzset"):
 
 def parse_mcp_response(res: Any) -> tuple[dict, str]:
   """Parses MCP tool output into (data_dict, raw_text)."""
-  raw_text = ""
-  if isinstance(res, list) and len(res) > 0:
-    first_item = res[0]
-    if isinstance(first_item, dict) and "text" in first_item:
-      raw_text = str(first_item["text"])
-    elif hasattr(first_item, "text"):
-      raw_text = str(first_item.text)
-    elif isinstance(first_item, str):
-      raw_text = first_item
-    else:
-      raw_text = str(first_item)
-  elif isinstance(res, dict):
+  if isinstance(res, dict):
     return res, json.dumps(res)
-  elif isinstance(res, str):
-    raw_text = res
+
+  if isinstance(res, list) and res:
+    item = res[0]
+    raw_text = item.get("text", "") if isinstance(item, dict) else getattr(item, "text", str(item))
   else:
-    raw_text = str(res)
+    raw_text = str(res) if res is not None else ""
 
   try:
     data = json.loads(raw_text)
     if isinstance(data, dict):
       return data, raw_text
-  except Exception:
+  except (json.JSONDecodeError, TypeError):
     pass
   return {}, raw_text
 
@@ -119,7 +108,6 @@ def build_formal_gate_graph(
     default_safe_action: str,
     system_prompt: Optional[str],
     max_retries: int,
-    agent_card: Optional[AgentCard],
     action_mapping: Optional[Dict[str, str]],
     default_monitored_vars: Optional[Dict[str, str]],
     monitored_tools: Optional[List[str]],
@@ -132,7 +120,6 @@ def build_formal_gate_graph(
       error_policy=error_policy,
       default_safe_action=default_safe_action,
       monitored_tools=monitored_tools,
-      agent_card=agent_card,
       action_mapping=action_mapping,
       default_monitored_vars=default_monitored_vars,
   )
@@ -190,39 +177,33 @@ async def _verify_asmetas_model(asmetas_tools: List[BaseTool]):
 
 @asynccontextmanager
 async def setup_mcp_and_enforcer_session():
-  """Context manager to initialize MCP servers, validate contracts, start AsmetaS enforcer,
+  """Context manager to initialize MCP servers, start AsmetaS enforcer,
 
   and handle cleanup gracefully on exit.
   """
-  # Load Agent Cards & Server Configs
-  asmetas_card = load_agent_card(GUARD_AGENT_CARD_PATH)
-  print_info(
-      f"Loaded guard card: [bold magenta]{asmetas_card.name}[/bold magenta]"
-  )
-
-  if ENVIRONMENT_AGENT_CARD_PATH.is_file():
-    env_card = load_agent_card(ENVIRONMENT_AGENT_CARD_PATH)
-    env_server_config = env_card.to_mcp_server_config()
-  else:
-    env_card = None
-    env_cmd, *env_args = DEFAULT_ENVIRONMENT_COMMAND
-    env_server_config = {
-        "command": env_cmd,
-        "args": env_args,
-        "transport": "stdio",
-    }
+  env_cmd, *env_args = ENVIRONMENT_MCP_COMMAND
+  asmetas_cmd, *asmetas_args = ASMETAS_MCP_COMMAND
 
   asmetas_env = {
       "ASMETAS_URL": os.getenv("ASMETAS_URL", "http://localhost:8080")
   }
   mcp_config = {
-      "environment_server": env_server_config,
-      "asmetas_server": asmetas_card.to_mcp_server_config(env=asmetas_env),
+      "environment_server": {
+          "command": env_cmd,
+          "args": env_args,
+          "transport": "stdio",
+      },
+      "asmetas_server": {
+          "command": asmetas_cmd,
+          "args": asmetas_args,
+          "transport": "stdio",
+          "env": asmetas_env,
+      },
   }
 
   client = MultiServerMCPClient(mcp_config)
 
-  # Retrieve & Validate Tools
+  # Retrieve Tools from MCP Servers
   try:
     asmetas_tools = await client.get_tools(server_name="asmetas_server")
     environment_tools = await client.get_tools(
@@ -231,11 +212,6 @@ async def setup_mcp_and_enforcer_session():
   except Exception as e:
     print_error(f"Failed to connect to MCP servers: {e}")
     raise
-
-  if missing := asmetas_card.validate_mcp_tools(asmetas_tools):
-    raise RuntimeError(
-        f"Missing required skills in AsmetaS contract: {missing}"
-    )
 
   # Model Check & Enforcer Session Start
   sanitise_tool = next(
@@ -249,7 +225,9 @@ async def setup_mcp_and_enforcer_session():
   )
 
   if not sanitise_tool or not start_tool:
-    raise RuntimeError("Essential Formal Gate tools missing from server.")
+    raise RuntimeError(
+        "Essential Formal Gate tools (sanitise_action, start_enforcer) missing from server."
+    )
 
   await _verify_asmetas_model(asmetas_tools)
 
@@ -267,7 +245,6 @@ async def setup_mcp_and_enforcer_session():
 
   try:
     yield {
-        "asmetas_card": asmetas_card,
         "environment_tools": environment_tools,
         "sanitise_tool": sanitise_tool,
     }
@@ -307,7 +284,6 @@ async def main():
           default_safe_action=DEFAULT_SAFE_ACTION,
           system_prompt=os.getenv("SYSTEM_PROMPT"),
           max_retries=MAX_RETRIES,
-          agent_card=session["asmetas_card"],
           action_mapping=dict(ACTION_MAPPING),
           default_monitored_vars=dict(DEFAULT_MONITORED_VARIABLES),
           monitored_tools=monitored_tools,

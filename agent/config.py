@@ -1,16 +1,13 @@
 """Central configuration constants for the Formal Gate Agent framework."""
 
-from pathlib import Path
+import sys
 
 # Name of the ASM model registered on AsmetaS-web-service
 ASMETA_MODEL_NAME = "SafetyEnforcerModel.asm"
 
-# Agent Cards
-GUARD_AGENT_CARD_PATH = Path("mcp_server/asmetas/agent-card.json")
-ENVIRONMENT_AGENT_CARD_PATH = Path("mcp_server/vehicle/agent-card.json")
-
-# Fallback environment command if Agent Card is not present
-DEFAULT_ENVIRONMENT_COMMAND = ["python", "mcp_server/vehicle/vehicle_mcp_server.py"]
+# MCP server execution commands (stdio)
+ASMETAS_MCP_COMMAND = [sys.executable, "mcp_server/asmetas/asmetas_mcp_server.py"]
+ENVIRONMENT_MCP_COMMAND = [sys.executable, "mcp_server/vehicle/vehicle_mcp_server.py"]
 
 # Maps candidate environment actions to ASM model rule actions
 ACTION_MAPPING = {
