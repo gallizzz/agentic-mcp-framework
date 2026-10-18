@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import time
 from typing import Literal, Optional
+from mcp.types import ToolAnnotations
 from pydantic import Field
 logging.getLogger("mcp").setLevel(logging.WARNING)
 try:
@@ -106,7 +107,7 @@ def execute_vehicle_action(
         f"New speed: {vehicle_state['speed']} km/h, Lane: {vehicle_state['lane']}."
     )
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
 def get_vehicle_telemetry() -> str:
     """
     Returns the current vehicle telemetry and sensory status.

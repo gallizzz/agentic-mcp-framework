@@ -22,11 +22,11 @@ DEFAULT_MONITORED_VARIABLES = {
 # policy: "shielding" (force sanitised action) or "replan" (send feedback back to LLM)
 GATE_POLICY = "shielding"
 
-# error_policy: "fail_safe" (execute safe action on gate error) or "fail_stop" (abort turn)
+# error_policy: "fail_safe" (execute DEFAULT_SAFE_ACTION on gate error) or "fail_stop" (abort turn)
 ERROR_POLICY = "fail_safe"
 
-# Safe fallback action when fail_safe is triggered
-DEFAULT_SAFE_ACTION = "STOP"
+# Safe fallback action when fail_safe is triggered.
+DEFAULT_SAFE_ACTION = "IDLE"
 
 # Maximum re-planning iterations before terminating turn
 MAX_RETRIES = 3

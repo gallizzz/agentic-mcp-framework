@@ -74,6 +74,13 @@ def create_gate_router(policy: str, max_retries: int = 3):
 # GRAPH BUILDER
 # ============================================================================
 
+def _read_only_tool_names(
+    tools: List[BaseTool], extra: Optional[List[str]] = None
+) -> set[str]:
+    """Tools allowed to skip the Formal Gate: MCP `readOnlyHint` annotation or explicit override."""
+    annotated = {t.name for t in tools if (t.metadata or {}).get("readOnlyHint")}
+    return annotated | set(extra or ())
+
 def build_formal_gate_graph(
     llm,
     environment_tools: List[BaseTool],
@@ -85,7 +92,7 @@ def build_formal_gate_graph(
     max_retries: int,
     action_mapping: Optional[Dict[str, str]],
     default_monitored_vars: Optional[Dict[str, str]],
-    monitored_tools: Optional[List[str]],
+    extra_read_only_tools: Optional[List[str]] = None,
 ):
     """Builds the pipeline graph: Planner (LLM) -> Formal Gate (AsmetaS) -> Environment."""
     builder = StateGraph(AgentState)
@@ -97,7 +104,7 @@ def build_formal_gate_graph(
             policy=policy,
             error_policy=error_policy,
             default_safe_action=default_safe_action,
-            monitored_tools=monitored_tools,
+            read_only_tools=_read_only_tool_names(environment_tools, extra_read_only_tools),
             action_mapping=action_mapping,
             default_monitored_vars=default_monitored_vars,
         ),
@@ -131,7 +138,10 @@ def _build_mcp_config() -> Dict[str, Dict[str, Any]]:
             "command": asmetas_cmd,
             "args": asmetas_args,
             "transport": "stdio",
-            "env": {"ASMETAS_URL": os.getenv("ASMETAS_URL", "http://localhost:8080")},
+            "env": {
+                "ASMETAS_URL": os.getenv("ASMETAS_URL", "http://localhost:8080"),
+                "ASMETA_MODEL_NAME": ASMETA_MODEL_NAME,
+            },
         },
     }
 
@@ -212,12 +222,9 @@ async def setup_mcp_and_enforcer_session():
 # MAIN INTERACTIVE CLI
 # ============================================================================
 
-def _monitored_tools_from_env() -> Optional[List[str]]:
-    """Parses the optional comma-separated MONITORED_TOOLS override."""
-    monitored_env = os.getenv("MONITORED_TOOLS")
-    if not monitored_env:
-        return None
-    return [t.strip() for t in monitored_env.split(",") if t.strip()]
+def _read_only_tools_from_env() -> List[str]:
+    """Parses the optional comma-separated READ_ONLY_TOOLS override (for unannotated tools)."""
+    return [t.strip() for t in os.getenv("READ_ONLY_TOOLS", "").split(",") if t.strip()]
 
 def _initial_state(user_input: str) -> AgentState:
     """Builds a fresh per-turn graph state for the given user request."""
@@ -254,7 +261,7 @@ async def main():
                 max_retries=MAX_RETRIES,
                 action_mapping=dict(ACTION_MAPPING),
                 default_monitored_vars=dict(DEFAULT_MONITORED_VARIABLES),
-                monitored_tools=_monitored_tools_from_env(),
+                extra_read_only_tools=_read_only_tools_from_env(),
             )
 
             print_ready_prompt()

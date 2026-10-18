@@ -5,7 +5,7 @@ LangGraph node for runtime action sanitisation via AsmetaS MCP server.
 
 import json
 import re
-from typing import Any, Callable, Dict, Literal, Optional, Tuple
+from typing import Any, Callable, Dict, Literal, Optional, Set, Tuple
 from langchain_core.messages import ToolMessage
 from pydantic import BaseModel, Field, ValidationError
 from agent.agent_state import AgentState
@@ -15,14 +15,6 @@ from agent.mcp_utils import mcp_result_text
 ACTION_ARG_KEYS = ("inputAction", "action", "command", "operation")
 # Command aliases that are folded into `inputAction` instead of being forwarded verbatim
 ACTION_ALIAS_KEYS = ("action", "command", "operation")
-
-# Naming conventions identifying perception/read-only tools
-READ_ONLY_PREFIXES = (
-    "get_", "read_", "list_", "query_", "fetch_", "status_", "show_", "check_",
-)
-READ_ONLY_SUFFIXES = (
-    "_telemetry", "_status", "_info", "_state", "_reading", "_readings",
-)
 
 # Matches `var=val` / `var: val` hints inside conversation messages
 _VAR_ASSIGNMENT_RE = re.compile(r"(\b[a-zA-Z_]\w*)\s*[:=]\s*([a-zA-Z0-9_\.-]+)")
@@ -78,10 +70,8 @@ def _extract_monitored_variables(
     action_mapping: dict,
 ) -> dict:
     """Extracts, normalises (snake -> camelCase), and resolves default variables."""
-    # Primary action resolution
-    action_val = next(
-        (str(tool_args[k]) for k in ACTION_ARG_KEYS if k in tool_args), "IDLE"
-    )
+    # Primary action resolution (callers guarantee at least one ACTION_ARG_KEYS entry)
+    action_val = next(str(tool_args[k]) for k in ACTION_ARG_KEYS if k in tool_args)
     monitored_vars = {"inputAction": action_val}
 
     # Primitive tool args & camelCase conversion
@@ -173,7 +163,10 @@ def _gate_result(
 # ============================================================================
 
 class FormalGateNode:
-    """Deterministic gate for runtime action sanitisation via AsmetaS."""
+    """Deterministic gate for runtime action sanitisation via AsmetaS.
+
+    Fail-closed: every tool call is gated unless the tool is declared read-only.
+    """
 
     def __init__(
         self,
@@ -181,7 +174,7 @@ class FormalGateNode:
         sanitise_action_callable: Optional[Callable] = None,
         policy: Literal["shielding", "replan"] = "shielding",
         error_policy: Literal["fail_stop", "fail_safe"] = "fail_safe",
-        monitored_tools: Optional[list[str]] = None,
+        read_only_tools: Optional[Set[str]] = None,
         action_mapping: Optional[Dict[str, str]] = None,
         default_monitored_vars: Optional[Dict[str, str]] = None,
     ):
@@ -189,25 +182,37 @@ class FormalGateNode:
         self.policy = policy
         self.error_policy = error_policy
         self.default_safe_action = default_safe_action
-        self.monitored_tools = monitored_tools
+        self.read_only_tools = set(read_only_tools or ())
         self.action_mapping = dict(action_mapping or {})
         self.reverse_action_mapping = {v: k for k, v in self.action_mapping.items()}
         self.default_monitored_vars = dict(default_monitored_vars or {})
 
-    def _is_actuator_action(self, tool_name: str, tool_args: dict) -> Tuple[bool, str]:
-        """Filters read-only tools from actuation commands."""
-        if self.monitored_tools is not None:
-            if tool_name in self.monitored_tools:
-                return True, ""
-            return False, f"Tool '{tool_name}' unmonitored."
-
-        if tool_name.startswith(READ_ONLY_PREFIXES) or tool_name.endswith(READ_ONLY_SUFFIXES):
-            return False, f"Tool '{tool_name}' is perception/read-only."
-
-        if not any(k in tool_args for k in ACTION_ARG_KEYS):
-            return False, f"Tool '{tool_name}' has no actuator command."
-
-        return True, ""
+    @staticmethod
+    def _block(
+        feedback: str,
+        candidate_action: Dict[str, Any],
+        tool_call_id: Optional[str],
+        action_history: list,
+        monitored_vars: Optional[dict] = None,
+    ) -> Dict[str, Any]:
+        """Rejects the action and terminates the turn without touching the environment."""
+        action_history.append({
+            "proposed_action": candidate_action,
+            "monitored_variables": monitored_vars or {},
+            "verdict": "ERROR",
+            "feedback": feedback,
+        })
+        return _gate_result(
+            "ERROR", feedback, candidate_action, None,
+            action_history=action_history,
+            messages=[
+                ToolMessage(
+                    content=f"[Formal Gate Error] {feedback}",
+                    tool_call_id=tool_call_id,
+                    status="error",
+                )
+            ],
+        )
 
     async def __call__(self, state: AgentState) -> Dict[str, Any]:
         messages = list(state.get("messages", []))
@@ -222,10 +227,20 @@ class FormalGateNode:
         tool_name = candidate_action.get("name", "")
         tool_args = candidate_action.get("args", {})
 
-        # Read-only filter check (BYPASS)
-        is_actuator, bypass_reason = self._is_actuator_action(tool_name, tool_args)
-        if not is_actuator:
-            return _gate_result("BYPASS", bypass_reason, candidate_action, candidate_action)
+        # Only tools explicitly declared read-only skip formal verification
+        if tool_name in self.read_only_tools:
+            return _gate_result(
+                "BYPASS", f"Tool '{tool_name}' is declared read-only.",
+                candidate_action, candidate_action,
+            )
+
+        # Fail-closed: an actuator call the ASM cannot evaluate is never executed
+        if not any(k in tool_args for k in ACTION_ARG_KEYS):
+            return self._block(
+                f"Tool '{tool_name}' is not read-only and has no action argument"
+                f" ({', '.join(ACTION_ARG_KEYS)}) to verify against the ASM.",
+                candidate_action, tool_call_id, action_history,
+            )
 
         # Monitored Variables Extraction & AsmetaS Invocation
         monitored_vars = _extract_monitored_variables(
@@ -246,22 +261,8 @@ class FormalGateNode:
                 sanitised_val = self.default_safe_action
                 feedback = f"Enforcer error ({feedback}). Fail-safe applied: '{self.default_safe_action}'."
             else:
-                action_history.append({
-                    "proposed_action": candidate_action,
-                    "monitored_variables": monitored_vars,
-                    "verdict": "ERROR",
-                    "feedback": feedback,
-                })
-                return _gate_result(
-                    "ERROR", feedback, candidate_action, None,
-                    action_history=action_history,
-                    messages=[
-                        ToolMessage(
-                            content=f"[Formal Gate Error] {feedback}",
-                            tool_call_id=tool_call_id,
-                            status="error",
-                        )
-                    ],
+                return self._block(
+                    feedback, candidate_action, tool_call_id, action_history, monitored_vars
                 )
 
         # Build Sanitised Action & Record History
