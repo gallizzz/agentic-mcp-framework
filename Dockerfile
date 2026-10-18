@@ -14,4 +14,4 @@ RUN pip install --no-cache-dir --upgrade pip && \
 COPY . .
 
 # Executes the Shielded LangGraph agent
-CMD ["python", "agent/agent_graph.py"]
+CMD ["python", "core/agent_graph.py"]

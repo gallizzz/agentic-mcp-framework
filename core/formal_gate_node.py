@@ -8,8 +8,8 @@ import re
 from typing import Any, Callable, Dict, Literal, Optional, Set, Tuple
 from langchain_core.messages import ToolMessage
 from pydantic import BaseModel, Field, ValidationError
-from agent.agent_state import AgentState
-from agent.mcp_utils import mcp_result_text
+from core.agent_state import AgentState
+from core.mcp_utils import mcp_result_text
 
 # Tool argument names that may carry the actuator command (in priority order)
 ACTION_ARG_KEYS = ("inputAction", "action", "command", "operation")
@@ -158,6 +158,25 @@ def _gate_result(
         **extra,
     }
 
+def _skip_extra_tool_calls(last_msg: Any) -> Tuple[list, list]:
+    """Answers every tool call after the first one without executing it (one gated action per response)."""
+    messages, history = [], []
+    for tc in (getattr(last_msg, "tool_calls", None) or [])[1:]:
+        feedback = "Not executed: only one action per response is evaluated by the Formal Gate."
+        messages.append(
+            ToolMessage(
+                content=f"[Formal Gate] {feedback} Propose it again if still needed.",
+                tool_call_id=tc.get("id"),
+                status="error",
+            )
+        )
+        history.append({
+            "proposed_action": {"name": tc["name"], "args": dict(tc.get("args") or {}), "id": tc.get("id")},
+            "verdict": "SKIPPED",
+            "feedback": feedback,
+        })
+    return messages, history
+
 # ============================================================================
 # FORMAL GATE NODE CLASS
 # ============================================================================
@@ -215,6 +234,17 @@ class FormalGateNode:
         )
 
     async def __call__(self, state: AgentState) -> Dict[str, Any]:
+        result = await self._evaluate(state)
+        messages = state.get("messages") or []
+        skipped_messages, skipped_history = _skip_extra_tool_calls(messages[-1] if messages else None)
+        if skipped_messages:
+            result["messages"] = list(result.get("messages") or []) + skipped_messages
+            result["action_history"] = (
+                list(result.get("action_history") or state.get("action_history") or []) + skipped_history
+            )
+        return result
+
+    async def _evaluate(self, state: AgentState) -> Dict[str, Any]:
         messages = list(state.get("messages", []))
         last_msg = messages[-1] if messages else None
         action_history = list(state.get("action_history", []))
@@ -296,7 +326,6 @@ class FormalGateNode:
                 return _gate_result(
                     "VIOLATION", feedback, candidate_action, sanitised_action,
                     action_history=action_history,
-                    retry_count=state.get("retry_count", 0) + 1,
                     messages=[
                         ToolMessage(
                             content=(

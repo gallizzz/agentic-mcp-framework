@@ -8,7 +8,7 @@ import os
 from pathlib import Path
 import sys
 import time
-from typing import Any, Callable, Dict, List, Literal, Optional
+from typing import Any, Callable, Dict, List, Optional
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage
@@ -16,8 +16,8 @@ from langchain_core.tools import BaseTool
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from langgraph.graph import END, START, StateGraph
-from agent.agent_state import AgentState
-from agent.cli_formatter import (
+from core.agent_state import AgentState
+from core.cli_formatter import (
     get_status_spinner,
     print_banner,
     print_divider,
@@ -28,21 +28,15 @@ from agent.cli_formatter import (
     print_step_update,
     print_success,
 )
-from agent.config import (
-    ACTION_MAPPING,
-    ASMETA_MODEL_NAME,
+from core.config import (
     ASMETAS_MCP_COMMAND,
-    DEFAULT_MONITORED_VARIABLES,
-    DEFAULT_SAFE_ACTION,
-    ENVIRONMENT_MCP_COMMAND,
-    ERROR_POLICY,
-    GATE_POLICY,
-    MAX_RETRIES,
+    UseCaseConfig,
+    load_use_case,
 )
-from agent.environment_node import create_environment_node
-from agent.formal_gate_node import FormalGateNode
-from agent.mcp_utils import parse_mcp_response
-from agent.planner_node import create_planner_node, planner_router
+from core.environment_node import create_environment_node
+from core.formal_gate_node import FormalGateNode
+from core.mcp_utils import parse_mcp_response
+from core.planner_node import create_planner_node, planner_router
 load_dotenv()
 os.environ["TZ"] = "Europe/Rome"
 if hasattr(time, "tzset"):
@@ -54,8 +48,8 @@ EXIT_COMMANDS = ("exit", "quit")
 # ROUTERS
 # ============================================================================
 
-def create_gate_router(policy: str, max_retries: int = 3):
-    """Routes after Formal Gate evaluation."""
+def create_gate_router(policy: str):
+    """Routes after Formal Gate evaluation (replan rounds are bounded by the planner)."""
 
     def gate_router(state: AgentState) -> str:
         verdict = state.get("guard_verdict")
@@ -64,7 +58,7 @@ def create_gate_router(policy: str, max_retries: int = 3):
             verdict == "VIOLATION" and policy == "shielding"
         ):
             return "environment"
-        if verdict == "VIOLATION" and state.get("retry_count", 0) < max_retries:
+        if verdict == "VIOLATION":
             return "planner"
         return END
 
@@ -83,15 +77,10 @@ def _read_only_tool_names(
 
 def build_formal_gate_graph(
     llm,
+    use_case: UseCaseConfig,
     environment_tools: List[BaseTool],
     sanitise_action_tool: Optional[Callable],
-    policy: Literal["shielding", "replan"],
-    error_policy: Literal["fail_stop", "fail_safe"],
-    default_safe_action: str,
-    system_prompt: Optional[str],
-    max_retries: int,
-    action_mapping: Optional[Dict[str, str]],
-    default_monitored_vars: Optional[Dict[str, str]],
+    system_prompt: Optional[str] = None,
     extra_read_only_tools: Optional[List[str]] = None,
 ):
     """Builds the pipeline graph: Planner (LLM) -> Formal Gate (AsmetaS) -> Environment."""
@@ -101,18 +90,20 @@ def build_formal_gate_graph(
         "formal_gate",
         FormalGateNode(
             sanitise_action_callable=sanitise_action_tool,
-            policy=policy,
-            error_policy=error_policy,
-            default_safe_action=default_safe_action,
+            policy=use_case.gate_policy,
+            error_policy=use_case.error_policy,
+            default_safe_action=use_case.default_safe_action,
             read_only_tools=_read_only_tool_names(environment_tools, extra_read_only_tools),
-            action_mapping=action_mapping,
-            default_monitored_vars=default_monitored_vars,
+            action_mapping=use_case.action_mapping,
+            default_monitored_vars=use_case.default_monitored_variables,
         ),
     )
 
     builder.add_edge(START, "planner")
     builder.add_conditional_edges("planner", planner_router)
-    builder.add_conditional_edges("formal_gate", create_gate_router(policy, max_retries))
+    builder.add_conditional_edges(
+        "formal_gate", create_gate_router(use_case.gate_policy)
+    )
 
     if environment_tools:
         builder.add_node("environment", create_environment_node(environment_tools))
@@ -124,9 +115,9 @@ def build_formal_gate_graph(
 # SETUP & LIFECYCLE MANAGERS
 # ============================================================================
 
-def _build_mcp_config() -> Dict[str, Dict[str, Any]]:
+def _build_mcp_config(use_case: UseCaseConfig) -> Dict[str, Dict[str, Any]]:
     """Builds the stdio configuration for the Environment and AsmetaS MCP servers."""
-    env_cmd, *env_args = ENVIRONMENT_MCP_COMMAND
+    env_cmd, *env_args = use_case.environment_mcp_command
     asmetas_cmd, *asmetas_args = ASMETAS_MCP_COMMAND
     return {
         "environment_server": {
@@ -140,12 +131,12 @@ def _build_mcp_config() -> Dict[str, Dict[str, Any]]:
             "transport": "stdio",
             "env": {
                 "ASMETAS_URL": os.getenv("ASMETAS_URL", "http://localhost:8080"),
-                "ASMETA_MODEL_NAME": ASMETA_MODEL_NAME,
+                "ASMETA_MODEL_NAME": use_case.asm_model_name,
             },
         },
     }
 
-async def _verify_asmetas_model(list_models_tool: Optional[BaseTool]):
+async def _verify_asmetas_model(list_models_tool: Optional[BaseTool], model_name: str):
     """Verifies that the formal model is already available on the AsmetaS web service."""
     if not list_models_tool:
         return
@@ -157,20 +148,21 @@ async def _verify_asmetas_model(list_models_tool: Optional[BaseTool]):
             f"AsmetaS web service unreachable: {models_data.get('message', models_raw)}"
         )
 
-    if ASMETA_MODEL_NAME not in models_data.get("models", []):
+    if model_name not in models_data.get("models", []):
         raise RuntimeError(
-            f"Formal model '{ASMETA_MODEL_NAME}' is not present on AsmetaS"
+            f"Formal model '{model_name}' is not present on AsmetaS"
             " server. Load it on the web service before starting the agent."
         )
-    print_info(f"Model '{ASMETA_MODEL_NAME}' confirmed on AsmetaS server.")
+    print_info(f"Model '{model_name}' confirmed on AsmetaS server.")
 
 @asynccontextmanager
-async def setup_mcp_and_enforcer_session():
+async def setup_mcp_and_enforcer_session(use_case: UseCaseConfig):
     """Context manager to initialize MCP servers, start AsmetaS enforcer,
 
     and handle cleanup gracefully on exit.
     """
-    client = MultiServerMCPClient(_build_mcp_config())
+    model_name = use_case.asm_model_name
+    client = MultiServerMCPClient(_build_mcp_config(use_case))
 
     # Retrieve Tools from MCP Servers
     try:
@@ -191,18 +183,16 @@ async def setup_mcp_and_enforcer_session():
             "Essential Formal Gate tools (sanitise_action, start_enforcer) missing from server."
         )
 
-    await _verify_asmetas_model(tools_by_name.get("list_models"))
+    await _verify_asmetas_model(tools_by_name.get("list_models"), model_name)
 
-    init_data, _ = parse_mcp_response(
-        await start_tool.ainvoke({"asm_name": ASMETA_MODEL_NAME})
-    )
+    init_data, _ = parse_mcp_response(await start_tool.ainvoke({"asm_name": model_name}))
     if init_data.get("status") == "error":
         raise RuntimeError(
             f"Failed to start AsmetaS Enforcer session: {init_data.get('message')}"
         )
 
     print_success(
-        f"AsmetaS enforcer session active for '{ASMETA_MODEL_NAME}' (ID:"
+        f"AsmetaS enforcer session active for '{model_name}' (ID:"
         f" {init_data.get('execution_id', 'OK')})"
     )
 
@@ -235,8 +225,7 @@ def _initial_state(user_input: str) -> AgentState:
         "guard_verdict": None,
         "sanitised_action": None,
         "guard_feedback": None,
-        "retry_count": 0,
-        "max_retries": MAX_RETRIES,
+        "planner_steps": 0,
         "execution_id": None,
         "action_history": [],
     }
@@ -249,18 +238,16 @@ async def main():
     llm = ChatGoogleGenerativeAI(model=model_name, temperature=0.0)
 
     try:
-        async with setup_mcp_and_enforcer_session() as session:
+        use_case_name = os.getenv("USE_CASE")
+        use_case = load_use_case(use_case_name)
+        print_info(f"Use case: [bold green]{use_case_name}[/bold green]")
+
+        async with setup_mcp_and_enforcer_session(use_case) as session:
             graph = build_formal_gate_graph(
                 llm=llm,
+                use_case=use_case,
                 environment_tools=session["environment_tools"],
                 sanitise_action_tool=session["sanitise_tool"],
-                policy=GATE_POLICY,
-                error_policy=ERROR_POLICY,
-                default_safe_action=DEFAULT_SAFE_ACTION,
-                system_prompt=os.getenv("SYSTEM_PROMPT"),
-                max_retries=MAX_RETRIES,
-                action_mapping=dict(ACTION_MAPPING),
-                default_monitored_vars=dict(DEFAULT_MONITORED_VARIABLES),
                 extra_read_only_tools=_read_only_tools_from_env(),
             )
 

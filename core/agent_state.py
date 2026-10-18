@@ -23,8 +23,7 @@ class AgentState(TypedDict):
     guard_feedback: Optional[str]
 
     # Execution controls & limits
-    retry_count: int
-    max_retries: int
+    planner_steps: int
     execution_id: Optional[str]
 
     # Audit history

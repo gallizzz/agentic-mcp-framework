@@ -19,7 +19,8 @@ mcp = MCPServer("asmetas-formal-guard")
 
 ASMETAS_URL = os.getenv("ASMETAS_URL", "http://localhost:8080").rstrip("/")
 
-DEFAULT_MODEL_NAME = os.getenv("ASMETA_MODEL_NAME", "SafetyEnforcerModel.asm")
+# Model used to transparently restart a lost session (provided by the agent)
+DEFAULT_MODEL_NAME = os.getenv("ASMETA_MODEL_NAME")
 HTTP_TIMEOUT = 10.0
 JSON_HEADERS = {"Content-Type": "application/json"}
 
@@ -181,6 +182,8 @@ async def sanitise_action(monitored_variables: dict) -> str:
     # _load_execution_id only ever returns valid (positive) IDs
     exec_id = _load_execution_id()
     if not exec_id:
+        if not DEFAULT_MODEL_NAME:
+            return _error("No active enforcer session and ASMETA_MODEL_NAME is not set.")
         start_res = await start_enforcer(DEFAULT_MODEL_NAME)
         exec_id = _load_execution_id()
         if not exec_id:
@@ -200,7 +203,8 @@ async def sanitise_action(monitored_variables: dict) -> str:
             if response.status_code in (404, 500):
                 logging.warning(f"AsmetaS step returned HTTP {response.status_code}. Resetting session and retrying...")
                 _clear_execution_id()
-                await start_enforcer(DEFAULT_MODEL_NAME)
+                if DEFAULT_MODEL_NAME:
+                    await start_enforcer(DEFAULT_MODEL_NAME)
                 new_exec_id = _load_execution_id()
                 if new_exec_id:
                     payload["id"] = int(new_exec_id)
