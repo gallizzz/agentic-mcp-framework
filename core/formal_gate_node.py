@@ -296,7 +296,6 @@ class FormalGateNode:
                 return _gate_result(
                     "VIOLATION", feedback, candidate_action, sanitised_action,
                     action_history=action_history,
-                    retry_count=state.get("retry_count", 0) + 1,
                     messages=[
                         ToolMessage(
                             content=(

@@ -11,8 +11,8 @@ from langchain_core.tools import BaseTool
 from langgraph.graph import END
 from core.agent_state import AgentState
 
-# Upper bound on gated actions per user turn (prevents runaway tool-calling loops)
-MAX_ACTIONS_PER_TURN = 3
+# Upper bound on tool-calling rounds per user turn (prevents runaway loops and endless replanning).
+MAX_STEPS_PER_TURN = 3
 
 # ============================================================================
 # HELPER FUNCTIONS
@@ -30,7 +30,7 @@ def planner_router(state: AgentState) -> str:
 
     if not getattr(messages[-1], "tool_calls", None):
         return END
-    if len(state.get("action_history", [])) >= MAX_ACTIONS_PER_TURN:
+    if state.get("planner_steps", 0) > MAX_STEPS_PER_TURN:
         return END
     return "formal_gate"
 
@@ -82,6 +82,10 @@ class PlannerNode:
             or build_default_system_prompt(self.tools)
         )
         self.llm_with_tools = self.llm.bind_tools(self.tools) if self.tools else self.llm
+        # Same tool schemas (the history contains tool calls), but calling them is forbidden
+        self.llm_final = (
+            self.llm.bind_tools(self.tools, tool_choice="none") if self.tools else self.llm
+        )
 
     async def __call__(self, state: AgentState) -> Dict[str, Any]:
         messages = list(state.get("messages", []))
@@ -89,5 +93,7 @@ class PlannerNode:
         if self.system_prompt and (not messages or not isinstance(messages[0], SystemMessage)):
             messages = [SystemMessage(content=self.system_prompt)] + messages
 
-        response = await self.llm_with_tools.ainvoke(messages)
-        return {"messages": [response]}
+        steps = state.get("planner_steps", 0)
+        llm = self.llm_final if steps >= MAX_STEPS_PER_TURN else self.llm_with_tools
+        response = await llm.ainvoke(messages)
+        return {"messages": [response], "planner_steps": steps + 1}

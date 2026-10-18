@@ -12,31 +12,17 @@ from typing import Dict, List, Literal, Optional
 
 CORE_DIR = Path(__file__).resolve().parent
 USE_CASES_DIR = CORE_DIR.parent / "use_cases"
-
-# AsmetaS MCP adapter (generic, shared by every use case)
 ASMETAS_MCP_COMMAND = [sys.executable, str(CORE_DIR / "mcp_server" / "asmetas_mcp_server.py")]
-
-# Maximum re-planning iterations (replan policy) before terminating the turn
-MAX_RETRIES = 3
 
 @dataclass(frozen=True)
 class UseCaseConfig:
     """Everything the engine needs to know about a specific case study."""
-
-    # Name of the ASM model registered on AsmetaS-web-service
     asm_model_name: str
-    # Environment MCP server execution command (stdio)
     environment_mcp_command: List[str]
-    # Safe fallback action when fail_safe is triggered. It bypasses the ASM, so it must be a value
-    # accepted by both the environment tool and the ASM `inputAction` domain, and safe in every state.
     default_safe_action: str
-    # Maps candidate environment actions to ASM model rule actions
     action_mapping: Dict[str, str] = field(default_factory=dict)
-    # Default values for monitored sensor/probe variables if not provided
     default_monitored_variables: Dict[str, str] = field(default_factory=dict)
-    # policy: "shielding" (force sanitised action) or "replan" (send feedback back to LLM)
     gate_policy: Literal["shielding", "replan"] = "shielding"
-    # error_policy: "fail_safe" (execute default_safe_action on gate error) or "fail_stop" (abort turn)
     error_policy: Literal["fail_stop", "fail_safe"] = "fail_safe"
 
 def available_use_cases() -> List[str]:

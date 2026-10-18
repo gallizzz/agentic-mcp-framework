@@ -30,7 +30,6 @@ from core.cli_formatter import (
 )
 from core.config import (
     ASMETAS_MCP_COMMAND,
-    MAX_RETRIES,
     UseCaseConfig,
     load_use_case,
 )
@@ -49,8 +48,8 @@ EXIT_COMMANDS = ("exit", "quit")
 # ROUTERS
 # ============================================================================
 
-def create_gate_router(policy: str, max_retries: int = 3):
-    """Routes after Formal Gate evaluation."""
+def create_gate_router(policy: str):
+    """Routes after Formal Gate evaluation (replan rounds are bounded by the planner)."""
 
     def gate_router(state: AgentState) -> str:
         verdict = state.get("guard_verdict")
@@ -59,7 +58,7 @@ def create_gate_router(policy: str, max_retries: int = 3):
             verdict == "VIOLATION" and policy == "shielding"
         ):
             return "environment"
-        if verdict == "VIOLATION" and state.get("retry_count", 0) < max_retries:
+        if verdict == "VIOLATION":
             return "planner"
         return END
 
@@ -103,7 +102,7 @@ def build_formal_gate_graph(
     builder.add_edge(START, "planner")
     builder.add_conditional_edges("planner", planner_router)
     builder.add_conditional_edges(
-        "formal_gate", create_gate_router(use_case.gate_policy, MAX_RETRIES)
+        "formal_gate", create_gate_router(use_case.gate_policy)
     )
 
     if environment_tools:
@@ -226,8 +225,7 @@ def _initial_state(user_input: str) -> AgentState:
         "guard_verdict": None,
         "sanitised_action": None,
         "guard_feedback": None,
-        "retry_count": 0,
-        "max_retries": MAX_RETRIES,
+        "planner_steps": 0,
         "execution_id": None,
         "action_history": [],
     }
