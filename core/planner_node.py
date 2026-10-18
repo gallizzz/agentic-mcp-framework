@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional
 from langchain_core.messages import SystemMessage
 from langchain_core.tools import BaseTool
 from langgraph.graph import END
-from agent.agent_state import AgentState
+from core.agent_state import AgentState
 
 # Upper bound on gated actions per user turn (prevents runaway tool-calling loops)
 MAX_ACTIONS_PER_TURN = 3

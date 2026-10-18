@@ -43,6 +43,7 @@ Modifica il file `.env` inserendo la tua chiave API:
 GEMINI_API_KEY=inserisci_qui_la_tua_api_key_gemini
 GEMINI_MODEL=gemini-flash-lite-latest
 ASMETAS_URL=http://localhost:8080
+USE_CASE=vehicle
 ```
 
 ### 3. Avvia il server formale AsmetaS
@@ -96,24 +97,49 @@ Per uscire dalla sessione digita `exit` oppure `quit`.
 
 ---
 
-## Configurazione (.env e agent/config.py)
+## Struttura del Progetto
+
+```text
+core/                     Motore di orchestrazione generico (indipendente dal dominio)
+  agent_graph.py          Entrypoint: grafo LangGraph Planner -> Formal Gate -> Environment
+  config.py               UseCaseConfig e caricamento del caso di studio
+  mcp_server/             Adattatore MCP verso AsmetaS-web-service
+use_cases/                Casi di studio
+  vehicle/                Emulatore dell'auto (caso di riferimento)
+    config.py             Modello ASM, server MCP dell'ambiente, mappature e politiche
+    vehicle_mcp_server.py Ambiente simulato esposto via MCP
+```
+
+---
+
+## Configurazione
 
 ### Variabili d'Ambiente (`.env`)
-Solo credenziali di autenticazione e parametri di connessione di rete:
+Credenziali, parametri di connessione e selezione del caso di studio:
 
 | Variabile | Default | Descrizione |
 | :--- | :--- | :--- |
 | `GEMINI_API_KEY` | *(obbligatoria)* | Chiave API di Google AI Studio. |
 | `GEMINI_MODEL` | `gemini-flash-lite-latest` | Modello LLM per il Planner (consigliato per evitare rate limit). |
 | `ASMETAS_URL` | `http://localhost:8080` | URL del backend REST del simulatore AsmetaS. |
+| `USE_CASE` | *(obbligatoria)* | Caso di studio da caricare da `use_cases/<nome>/config.py` (es. `vehicle`). Se manca, l'agente non parte. |
+| `READ_ONLY_TOOLS` | *(vuoto)* | Tool dell'ambiente (separati da virgola) che non passano dal Formal Gate, per server MCP privi dell'annotazione `readOnlyHint`. |
+| `SYSTEM_PROMPT` | *(generato)* | Sovrascrive il system prompt del Planner. |
 
-### Costanti di Configurazione (`agent/config.py`)
-Tutti i parametri statici, configurazioni dei server MCP, mappature di dominio e politiche del Formal Gate sono centralizzati in `agent/config.py`:
-* **`ASMETA_MODEL_NAME`**: Nome del modello formale registrato su AsmetaS (`SafetyEnforcerModel.asm`).
-* **`ASMETAS_MCP_COMMAND`** e **`ENVIRONMENT_MCP_COMMAND`**: Comandi di esecuzione stdio per i server MCP (AsmetaS guard e ambiente).
-* **`ACTION_MAPPING`**: Mappatura tra le azioni candidate dell'ambiente e quelle del modello ASM (`{"KEEP": "IDLE"}`).
-* **`DEFAULT_MONITORED_VARIABLES`**: Valori di default per le variabili sensoriali monitorate.
-* **`GATE_POLICY`** e **`ERROR_POLICY`**: Politiche di shielding e fail-safe del Formal Gate.
+### Configurazione del Caso di Studio (`use_cases/<nome>/config.py`)
+Ogni caso di studio definisce `USE_CASE = UseCaseConfig(...)` con:
+* **`asm_model_name`**: Nome del modello formale registrato su AsmetaS (per il veicolo `SafetyEnforcerModel.asm`).
+* **`environment_mcp_command`**: Comando stdio del server MCP dell'ambiente.
+* **`default_safe_action`**: Azione eseguita in modalità fail-safe; deve essere accettata sia dall'ambiente sia dal dominio `inputAction` dell'ASM.
+* **`action_mapping`**: Mappatura tra le azioni dell'ambiente e quelle del modello ASM (per il veicolo `{"KEEP": "IDLE"}`).
+* **`default_monitored_variables`**: Valori di default per le variabili sensoriali monitorate.
+* **`gate_policy`** e **`error_policy`**: Politiche di shielding/replan e fail-safe/fail-stop del Formal Gate.
+
+### Aggiungere un Nuovo Caso di Studio
+1. Crea `use_cases/<nome>/` con un server MCP dell'ambiente. Annota i tool di sola lettura con `ToolAnnotations(readOnlyHint=True)`: tutti gli altri passano obbligatoriamente dal Formal Gate.
+2. Crea `use_cases/<nome>/config.py` con `USE_CASE = UseCaseConfig(...)`.
+3. Carica il modello ASM su `AsmetaS-web-service`: il modello deve esporre la variabile monitorata `inputAction` e la variabile di output `outAction`.
+4. Imposta `USE_CASE=<nome>` nel `.env` e avvia l'agente.
 
 ---
 

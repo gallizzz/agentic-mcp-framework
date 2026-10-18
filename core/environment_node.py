@@ -6,7 +6,7 @@ LangGraph environment node for dispatching verified actions to MCP tools
 from typing import Any, Dict, List, Optional
 from langchain_core.tools import BaseTool
 from langgraph.prebuilt import ToolNode
-from agent.agent_state import AgentState
+from core.agent_state import AgentState
 
 def _shielding_notice(
     candidate_action: Optional[Dict[str, Any]],
