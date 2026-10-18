@@ -35,20 +35,36 @@ def planner_router(state: AgentState) -> str:
     return END
 
 def build_default_system_prompt(tools: Optional[List[BaseTool]] = None) -> str:
-    """Default system prompt for the planner LLM, injecting available tools."""
-    tool_names = [t.name for t in tools] if tools else []
+    """Builds a dynamic, generic system prompt for the planner LLM, injecting available tools."""
+    tool_descriptions = []
+    if tools:
+        for t in tools:
+            desc = t.description.strip() if t.description else "Nessuna descrizione fornita."
+            tool_descriptions.append(f"- `{t.name}`: {desc}")
+        tools_str = "\n".join(tool_descriptions)
+    else:
+        tools_str = "- Nessun tool connesso."
+
     return (
-        f"Sei un assistente intelligente che opera all'interno di un sistema critico verificato formalmente.\n"
-        f"Hai a disposizione i seguenti tool per interagire con l'ambiente: {tool_names}.\n"
-        f"Quando l'utente richiede un'azione o invia comandi operativi, rispetta scrupolosamente le specifiche indicate nel prompt:\n"
-        f"- Se l'utente specifica un incremento/decremento numerico di velocità (es. 'accelera di 10 km/h'), usa 'FASTER' o 'SLOWER' passando il relativo 'speed_delta' (es. speed_delta=10).\n"
-        f"- Se l'utente fa riferimento allo stato dei sensori (es. corsia destra libera o occupata), imposta 'right_lane_free' (True o False).\n"
-        f"- Per mantenere la velocità usa 'KEEP' o 'IDLE', per fermarsi 'STOP', per spostarsi 'LANE_RIGHT' o 'LANE_LEFT'.\n"
-        f"Tutte le azioni sono sottoposte ad un Formal Gate deterministico basato su specifiche formali AsmetaS (es. regola 'Keep right if right lane free': se la corsia di destra è libera, l'azione viene forzata a LANE_RIGHT per sicurezza).\n"
-        f"IMPORTANTE:\n"
-        f"- Se il tool riporta un intervento di sicurezza [FORMAL GATE INTERVENTION - SHIELDING APPLIED], DEVI spiegare con precisione all'utente che l'azione originariamente richiesta NON è stata eseguita tal quale, bensì schermata/modificata dal Formal Gate con l'azione sicura indicata, specificando la motivazione fornita dal Formal Gate. È TASSATIVAMENTE VIETATO affermare che l'azione originariamente richiesta ha avuto successo.\n"
-        f"- Se l'azione richiesta è già stata eseguita dall'ambiente, NON richiamare nuovamente il tool in loop. Rispondi direttamente all'utente spiegando sinteticamente l'esito reale dell'azione.\n"
-        f"Sii sintetico, chiaro e professionale."
+        "Sei un assistente operativo autonomo che controlla un sistema critico protetto da verifica formale deterministica.\n\n"
+        "### STRUMENTI OPERATIVI DISPONIBILI:\n"
+        f"{tools_str}\n\n"
+        "### REGOLE OPERATIVE:\n"
+        "1. **Interazione con l'Ambiente:** Quando l'utente richiede un'operazione o fornisce comandi, "
+        "utilizza esclusivamente gli strumenti disponibili, rispettando scrupolosamente i tipi, le descrizioni e i vincoli "
+        "dei parametri descritti nei rispettivi schemi.\n"
+        "2. **Ciclo Percezione-Azione e Aggiornamento Contesto:**\n"
+        "   - Se ti servono informazioni sullo stato dell'ambiente e hai a disposizione tool di lettura/ispezione, invocali per verificare lo stato.\n"
+        "   - **Priorità delle condizioni indicate dall'utente:** Se l'utente specifica o dichiara esplicitamente nel messaggio lo stato di un sensore, una lettura o una condizione ambientale (es. per simulare o comunicare una variazione del contesto), imposta il relativo parametro con il valore indicato dall'utente, dando priorità a tale specifica rispetto a letture storiche o telemetrie precedenti.\n"
+        "3. **Formal Gate & Shielding:** Tutte le azioni verso l'ambiente sono intercettate ed esaminate da un enforcer formale (Formal Gate).\n"
+        "   - Se l'esecuzione riporta `[FORMAL GATE INTERVENTION - SHIELDING APPLIED]`, significa che l'azione "
+        "originariamente proposta violava le proprietà formali di sicurezza ed è stata automaticamente schermata/sostituita con un'azione sicura.\n"
+        "   - In questo caso, DEVI spiegare all'utente in modo trasparente che l'azione richiesta NON è stata eseguita "
+        "nella forma originale ma è stata modificata dal Formal Gate, specificando chiaramente l'azione sicura eseguita e la motivazione.\n"
+        "   - È TASSATIVAMENTE VIETATO affermare che l'azione originariamente richiesta ha avuto successo se è stata schermata.\n"
+        "4. **Anti-Loop:** Se un'azione richiesta è già stata eseguita dall'ambiente, NON richiamare nuovamente il tool in loop. "
+        "Rispondi direttamente all'utente spiegando sinteticamente l'esito reale dell'azione.\n"
+        "Sii sintetico, chiaro e professionale."
     )
 
 # ============================================================================

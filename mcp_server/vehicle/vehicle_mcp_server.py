@@ -13,7 +13,8 @@ except ModuleNotFoundError:
     from mcp.server.fastmcp import FastMCP as MCPServer
 import json
 from pathlib import Path
-from typing import Optional
+from typing import Literal, Optional
+from pydantic import Field
 os.environ["TZ"] = "Europe/Rome"
 if hasattr(time, "tzset"):
     time.tzset()
@@ -54,7 +55,20 @@ def save_vehicle_state(state: dict) -> None:
 # ============================================================================
 
 @mcp.tool()
-def execute_vehicle_action(action: str, speed_delta: Optional[int] = None, right_lane_free: Optional[bool] = None) -> str:
+def execute_vehicle_action(
+    action: Literal["FASTER", "SLOWER", "STOP", "KEEP", "IDLE", "LANE_RIGHT", "LANE_LEFT", "CHANGE_LANE"] = Field(
+        ...,
+        description="The driving command to execute: 'FASTER' (accelerate), 'SLOWER' (decelerate), 'STOP' (halt), 'KEEP'/'IDLE' (maintain current speed and lane), 'LANE_RIGHT' (move to right lane), 'LANE_LEFT' (move to left/center lane), 'CHANGE_LANE' (switch lanes)."
+    ),
+    speed_delta: Optional[int] = Field(
+        None,
+        description="Speed change in km/h when accelerating or decelerating (e.g. 10)."
+    ),
+    right_lane_free: Optional[bool] = Field(
+        None,
+        description="Sensor reading for the right lane: True if free/empty, False if occupied."
+    ),
+) -> str:
     """
     Executes a driving control action on the vehicle actuator in the environment.
     """
