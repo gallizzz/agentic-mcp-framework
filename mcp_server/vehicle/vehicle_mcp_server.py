@@ -3,18 +3,18 @@
 This server simulates a vehicle actuator environment, exposing tools for executing driving control actions and retrieving telemetry data.
 """
 
+import json
 import logging
 import os
+from pathlib import Path
 import time
+from typing import Literal, Optional
+from pydantic import Field
 logging.getLogger("mcp").setLevel(logging.WARNING)
 try:
     from mcp.server.mcpserver import MCPServer
 except ModuleNotFoundError:
     from mcp.server.fastmcp import FastMCP as MCPServer
-import json
-from pathlib import Path
-from typing import Literal, Optional
-from pydantic import Field
 os.environ["TZ"] = "Europe/Rome"
 if hasattr(time, "tzset"):
     time.tzset()

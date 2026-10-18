@@ -11,6 +11,9 @@ from langchain_core.tools import BaseTool
 from langgraph.graph import END
 from agent.agent_state import AgentState
 
+# Upper bound on gated actions per user turn (prevents runaway tool-calling loops)
+MAX_ACTIONS_PER_TURN = 3
+
 # ============================================================================
 # HELPER FUNCTIONS
 # ============================================================================
@@ -25,23 +28,19 @@ def planner_router(state: AgentState) -> str:
     if not messages:
         return END
 
-    last_message = messages[-1]
-    if hasattr(last_message, "tool_calls") and last_message.tool_calls:
-        # Prevent runaway tool calling loops in the same turn
-        action_history = state.get("action_history", [])
-        if len(action_history) >= 3:
-            return END
-        return "formal_gate"
-    return END
+    if not getattr(messages[-1], "tool_calls", None):
+        return END
+    if len(state.get("action_history", [])) >= MAX_ACTIONS_PER_TURN:
+        return END
+    return "formal_gate"
 
 def build_default_system_prompt(tools: Optional[List[BaseTool]] = None) -> str:
     """Builds a dynamic, generic system prompt for the planner LLM, injecting available tools."""
-    tool_descriptions = []
     if tools:
-        for t in tools:
-            desc = t.description.strip() if t.description else "Nessuna descrizione fornita."
-            tool_descriptions.append(f"- `{t.name}`: {desc}")
-        tools_str = "\n".join(tool_descriptions)
+        tools_str = "\n".join(
+            f"- `{t.name}`: {t.description.strip() if t.description else 'Nessuna descrizione fornita.'}"
+            for t in tools
+        )
     else:
         tools_str = "- Nessun tool connesso."
 

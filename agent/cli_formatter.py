@@ -11,25 +11,24 @@ from rich.panel import Panel
 
 console = Console()
 
+ENV_OUTPUT_MAX_LEN = 200
+
+def _log(message: str, style: str) -> None:
+    console.print(f"[{time.strftime('%X')}] {message}", style=style)
+
 def extract_text_content(content: Any) -> str:
     """
     Extracts clean plain text from strings, list of content blocks, or dictionaries.
     """
-    if isinstance(content, str):
-        return content.strip()
     if isinstance(content, list):
-        text_parts = []
-        for part in content:
-            if isinstance(part, dict) and "text" in part:
-                text_parts.append(str(part["text"]))
-            elif isinstance(part, str):
-                text_parts.append(part)
-            else:
-                text_parts.append(str(part))
-        return "\n".join(text_parts).strip()
+        return "\n".join(extract_text_content(part) for part in content).strip()
     if isinstance(content, dict) and "text" in content:
-        return str(content["text"]).strip()
+        content = content["text"]
     return str(content).strip()
+
+# ============================================================================
+# STATUS MESSAGES
+# ============================================================================
 
 def print_banner():
     console.print(
@@ -40,91 +39,82 @@ def print_banner():
         )
     )
 
-def print_info(message: str, prefix_time: bool = True):
-    ts = f"[{time.strftime('%X')}] " if prefix_time else ""
-    console.print(f"{ts}{message}", style="dim")
+def print_info(message: str):
+    _log(message, "dim")
 
-def print_warning(message: str, prefix_time: bool = True):
-    ts = f"[{time.strftime('%X')}] " if prefix_time else ""
-    console.print(f"{ts}{message}", style="yellow")
+def print_error(message: str):
+    _log(message, "bold red")
 
-def print_error(message: str, prefix_time: bool = True):
-    ts = f"[{time.strftime('%X')}] " if prefix_time else ""
-    console.print(f"{ts}{message}", style="bold red")
-
-def print_success(message: str, prefix_time: bool = True):
-    ts = f"[{time.strftime('%X')}] " if prefix_time else ""
-    console.print(f"{ts}{message}", style="green")
+def print_success(message: str):
+    _log(message, "green")
 
 def print_ready_prompt():
-    console.print(
-        f"\n[{time.strftime('%X')}] Formal Gate Agent ready.",
-        style="bold green",
-    )
+    console.print()
+    _log("Formal Gate Agent ready.", "bold green")
     console.print("Type your requests below. Type 'exit' or 'quit' to terminate.", style="dim")
 
 def print_divider():
     console.print("-" * 40, style="dim")
 
 def print_session_end():
-    console.print(f"\n[{time.strftime('%X')}] Session terminated.", style="dim")
+    console.print()
+    _log("Session terminated.", "dim")
 
 def get_status_spinner(message: str = "Processing..."):
-    return console.status(
-        f"[bold green][{time.strftime('%X')}] {message}",
-        spinner="dots",
-    )
+    return console.status(f"[bold green][{time.strftime('%X')}] {message}", spinner="dots")
+
+# ============================================================================
+# GRAPH STEP RENDERING
+# ============================================================================
+
+_VERDICT_STYLES = {"APPROVED": "green", "VIOLATION": "yellow", "ERROR": "red"}
+
+def _render_planner(update: Dict[str, Any]) -> None:
+    msgs = update.get("messages", [])
+    if not msgs:
+        return
+    msg = msgs[-1]
+    for tc in getattr(msg, "tool_calls", None) or []:
+        _log(f"Proposed action: '{tc['name']}' ({tc['args']})", "bold cyan")
+    if not getattr(msg, "tool_calls", None):
+        text = extract_text_content(msg.content)
+        if text:
+            console.print()
+            console.print(Markdown(text))
+
+def _render_formal_gate(update: Dict[str, Any]) -> None:
+    verdict = update.get("guard_verdict")
+    feedback = update.get("guard_feedback")
+
+    if verdict == "BYPASS":
+        _log(f"Bypass: {feedback}", "dim")
+    elif verdict in _VERDICT_STYLES:
+        style = _VERDICT_STYLES[verdict]
+        message = f"Verdict: [bold {style}]{verdict}[/bold {style}] | "
+        if verdict == "VIOLATION":
+            sanitised = update.get("sanitised_action")
+            message += (
+                f"Shielded to: {sanitised.get('args') if sanitised else 'None'}\n"
+                f"    [dim]Feedback: {feedback}[/dim]"
+            )
+        else:
+            message += str(feedback)
+        _log(message, style)
+
+def _render_environment(update: Dict[str, Any]) -> None:
+    for tool_msg in update.get("messages", []):
+        content = extract_text_content(tool_msg.content)
+        if len(content) > ENV_OUTPUT_MAX_LEN:
+            content = content[:ENV_OUTPUT_MAX_LEN] + "..."
+        _log(content, "dim green")
+
+_STEP_RENDERERS = {
+    "planner": _render_planner,
+    "formal_gate": _render_formal_gate,
+    "environment": _render_environment,
+}
 
 def print_step_update(step_data: Dict[str, Any]):
-    timestamp = time.strftime("%X")
-
-    if "planner" in step_data:
-        msgs = step_data["planner"].get("messages", [])
-        if msgs:
-            msg = msgs[-1]
-            if hasattr(msg, "tool_calls") and msg.tool_calls:
-                for tc in msg.tool_calls:
-                    console.print(
-                        f"[{timestamp}] [planner] Proposed action: '{tc['name']}' ({tc['args']})",
-                        style="bold cyan",
-                    )
-            elif msg.content:
-                text = extract_text_content(msg.content)
-                if text:
-                    console.print(f"\n[{timestamp}] [agent]", style="bold cyan")
-                    console.print(Markdown(text))
-
-    if "formal_gate" in step_data:
-        gate_res = step_data["formal_gate"]
-        verdict = gate_res.get("guard_verdict")
-        feedback = gate_res.get("guard_feedback")
-        sanitised = gate_res.get("sanitised_action")
-
-        if verdict == "APPROVED":
-            console.print(
-                f"[{timestamp}] [formal-gate] Verdict: [bold green]APPROVED[/bold green] | {feedback}",
-                style="green",
-            )
-        elif verdict == "VIOLATION":
-            sanitised_display = sanitised.get("args") if sanitised else "None"
-            console.print(
-                f"[{timestamp}] [formal-gate] Verdict: [bold yellow]VIOLATION[/bold yellow] | "
-                f"Shielded to: {sanitised_display}\n"
-                f"    [dim]Feedback: {feedback}[/dim]",
-                style="yellow",
-            )
-        elif verdict == "ERROR":
-            console.print(
-                f"[{timestamp}] [formal-gate] Verdict: [bold red]ERROR[/bold red] | {feedback}",
-                style="red",
-            )
-        elif verdict == "BYPASS":
-            console.print(f"[{timestamp}] [formal-gate] Bypass: {feedback}", style="dim")
-
-    if "environment" in step_data:
-        env_res = step_data["environment"].get("messages", [])
-        for tool_msg in env_res:
-            content = extract_text_content(tool_msg.content)
-            max_len = 200
-            truncated = content[:max_len] + ("..." if len(content) > max_len else "")
-            console.print(f"[{timestamp}] [env] {truncated}", style="dim green")
+    for node_name, render in _STEP_RENDERERS.items():
+        if node_name in step_data:
+            render(step_data[node_name])
