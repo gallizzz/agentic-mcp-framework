@@ -1,0 +1,26 @@
+{
+  "request_id": "compatible-residual",
+  "expected_version": 0,
+  "actions": [
+    {
+      "kind": "reschedule",
+      "parameters": {
+        "compartment": "compartment2",
+        "dose_index": 0,
+        "time": 1050
+      }
+    },
+    {
+      "kind": "reschedule",
+      "parameters": {
+        "compartment": "compartment2",
+        "dose_index": 1,
+        "time": 1160
+      }
+    }
+  ],
+  "goals": {
+    "available_from": 960,
+    "latest_time": 1110
+  }
+}
