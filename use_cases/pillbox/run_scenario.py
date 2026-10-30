@@ -13,7 +13,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from enforcement.rest_client import AsmetaRestClient
-from use_cases.pillbox.wiring import DEFAULT_CONFIG, DEFAULT_URL, asm_sources, build_gateway
+from use_cases.pillbox.wiring import DEFAULT_CONFIG, DEFAULT_URL, build_gateway, deploy_models
 
 
 def main() -> int:
@@ -21,7 +21,7 @@ def main() -> int:
     parser.add_argument("--url", default=DEFAULT_URL)
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     commands = parser.add_subparsers(dest="command", required=True)
-    commands.add_parser("deploy", help="Upload trusted models to an idle dedicated service")
+    commands.add_parser("deploy", help="Upload all configured models to an idle service")
     run = commands.add_parser("run", help="Execute one plan in a fresh simulated live session")
     run.add_argument("plan", type=Path, help="JSON plan, e.g. use_cases/pillbox/scenarios/compatible_repair.json")
     run.add_argument("--output", type=Path, help="Optional result JSON file")
@@ -33,9 +33,10 @@ def main() -> int:
     gateway = None
     try:
         if args.command == "deploy":
-            client.deploy(asm_sources())
-            print("Models uploaded. No active simulation was modified.")
+            uploaded = deploy_models(client, args.config, require_idle=True)
+            print(f"Models uploaded: {', '.join(uploaded)}. No active simulation was modified.")
             return 0
+        deploy_models(client, args.config)
         gateway = build_gateway(client, args.config)
         gateway.initialize()
         plan = json.loads(args.plan.read_text(encoding="utf-8"))

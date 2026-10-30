@@ -38,22 +38,24 @@ class AsmetaRestClient:
             self.failed = True
             raise AsmError(f"{method} {path} failed; not retried: {exc}") from exc
 
-    def deploy(self, paths: list[Path]) -> None:
-        """Administrative upload. Call only on an idle, dedicated service."""
+    def running_models(self) -> dict:
         models = self._request("GET", "/running-models").get("models")
-        if not isinstance(models, dict) or models:
-            raise AsmError("Deployment requires a dedicated service with no active models")
-        if not paths:
-            raise AsmError("No ASM source files to deploy")
-        for path in paths:
-            with path.open("rb") as stream:
-                self._request("POST", "/upload-model",
-                              files={"file": (path.name, stream, "text/plain")}, parse_json=False)
-        inventory = self._request("GET", "/model-list").get("models")
-        if not isinstance(inventory, list):
+        if not isinstance(models, dict):
+            raise AsmError("Invalid running-models response")
+        return models
+
+    def inventory(self) -> set[str]:
+        """Names of the files stored in the service's models folder."""
+        models = self._request("GET", "/model-list").get("models")
+        if not isinstance(models, list):
             raise AsmError("Invalid model inventory")
-        if not {p.name for p in paths}.issubset(inventory):
-            raise AsmError("The server did not retain all uploaded models")
+        return set(models)
+
+    def upload(self, path: Path) -> None:
+        """Administrative upload to the models folder; a same-name file is replaced."""
+        with path.open("rb") as stream:
+            self._request("POST", "/upload-model",
+                          files={"file": (path.name, stream, "text/plain")}, parse_json=False)
 
     def start(self, model_name: str) -> int:
         if Path(model_name).name != model_name or not model_name.endswith(".asm"):

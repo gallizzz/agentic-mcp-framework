@@ -65,7 +65,7 @@ def dose_action(compartment: str, index: int, time: int) -> Action:
 
 
 class PillboxBinding:
-    device_model = "pillbox.asm"
+    device_model = "pillboxDevice.asm"
     enforcer_model = "scheduler.asm"
     coordinator_model = "PreviewCoordinator.asm"
     setup_models = ("configurationMgr.asm",)

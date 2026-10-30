@@ -1,7 +1,8 @@
 """MCP server of the pillbox use case (stdio).
 
-Initializes the enforcement gateway before serving: if the ASMETA service is
-unreachable or a model is missing, the process exits and the agent cannot start.
+Uploads the configured models and initializes the enforcement gateway before
+serving: if the ASMETA service is unreachable or a model cannot be loaded, the
+process exits and the agent cannot start.
 """
 
 import argparse
@@ -14,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from enforcement.mcp_facade import serve
 from enforcement.rest_client import AsmetaRestClient
-from use_cases.pillbox.wiring import DEFAULT_CONFIG, DEFAULT_URL, build_gateway
+from use_cases.pillbox.wiring import DEFAULT_CONFIG, DEFAULT_URL, build_gateway, deploy_models
 
 
 def main() -> int:
@@ -29,6 +30,7 @@ def main() -> int:
     client = AsmetaRestClient(args.url)
     gateway = None
     try:
+        deploy_models(client, args.config)
         gateway = build_gateway(client, args.config)
         gateway.initialize()
         serve(gateway)

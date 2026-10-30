@@ -1,7 +1,7 @@
 // v2: executable Pillbox device model with explicit targeted rescheduling.
 // Idempotent command execution + single-writer scheduleVersion.
 // Must be validated with ASMETA before empirical claims.
-asm pillbox
+asm pillboxDevice
 
 import  StandardLibrary
 
