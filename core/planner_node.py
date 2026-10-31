@@ -11,30 +11,42 @@ from langchain_core.tools import BaseTool
 from langgraph.graph import END
 from core.agent_state import AgentState
 
-# Upper bound on tool-calling rounds per user turn (prevents runaway loops and endless replanning).
+# Default upper bound on tool-calling rounds per user turn (prevents runaway loops and endless
+# replanning); a use case can override it with `max_steps_per_turn`.
 MAX_STEPS_PER_TURN = 3
 
 # ============================================================================
 # HELPER FUNCTIONS
 # ============================================================================
 
-def create_planner_node(llm: Any, tools: Optional[List[BaseTool]] = None, system_prompt: Optional[str] = None) -> PlannerNode:
+def create_planner_node(
+    llm: Any,
+    tools: Optional[List[BaseTool]] = None,
+    system_prompt: Optional[str] = None,
+    max_steps: int = MAX_STEPS_PER_TURN,
+    hints: str = "",
+) -> PlannerNode:
     """Factory function to instantiate the PlannerNode."""
-    return PlannerNode(llm=llm, tools=tools, system_prompt=system_prompt)
+    return PlannerNode(llm=llm, tools=tools, system_prompt=system_prompt, max_steps=max_steps, hints=hints)
 
-def planner_router(state: AgentState) -> str:
-    """Route tool calls to formal_gate, or terminate turn if no tools were called."""
-    messages = state.get("messages", [])
-    if not messages:
-        return END
+def create_planner_router(max_steps: int = MAX_STEPS_PER_TURN):
+    """Routes tool calls to formal_gate, or terminates the turn if no tools were called."""
 
-    if not getattr(messages[-1], "tool_calls", None):
-        return END
-    if state.get("planner_steps", 0) > MAX_STEPS_PER_TURN:
-        return END
-    return "formal_gate"
+    def planner_router(state: AgentState) -> str:
+        messages = state.get("messages", [])
+        if not messages:
+            return END
 
-def build_default_system_prompt(tools: Optional[List[BaseTool]] = None) -> str:
+        if not getattr(messages[-1], "tool_calls", None):
+            return END
+        # Fail-closed: after a blocking verdict no further action reaches the gate
+        if state.get("final_answer_only") or state.get("planner_steps", 0) > max_steps:
+            return END
+        return "formal_gate"
+
+    return planner_router
+
+def build_default_system_prompt(tools: Optional[List[BaseTool]] = None, hints: str = "") -> str:
     """Builds a dynamic, generic system prompt for the planner LLM, injecting available tools."""
     if tools:
         tools_str = "\n".join(
@@ -64,6 +76,10 @@ def build_default_system_prompt(tools: Optional[List[BaseTool]] = None) -> str:
         "di sicurezza ed è stata sostituita con un'azione sicura. DEVI spiegare all'utente in modo trasparente che l'azione richiesta "
         "NON è stata eseguita nella forma originale, specificando l'azione sicura eseguita e la motivazione. "
         "È TASSATIVAMENTE VIETATO affermare che l'azione originariamente richiesta ha avuto successo.\n"
+        "   - `[FORMAL GATE: REPLAN]`: l'azione NON è stata eseguita e lo stato non è cambiato. Usa il motivo indicato "
+        "per proporre un'alternativa, rileggendo prima lo stato se serve, oppure spiega all'utente perché la richiesta non è realizzabile.\n"
+        "   - `[FORMAL GATE: BLOCKED]`: l'azione è stata bloccata e NON eseguita. Spiega all'utente il motivo indicato "
+        "e cosa potrebbe cambiare nella richiesta; non puoi eseguire altre azioni in questo turno.\n"
         "   - Non dedurre interventi del Formal Gate che il risultato non riporta e non scrivere mai questi marker nelle tue risposte.\n"
         "4. **Una Chiamata a Tool per Risposta:** Ogni tua risposta può contenere al massimo una chiamata a tool; "
         "le chiamate aggiuntive nella stessa risposta non vengono eseguite. Puoi però eseguire più chiamate in sequenza "
@@ -71,6 +87,7 @@ def build_default_system_prompt(tools: Optional[List[BaseTool]] = None) -> str:
         "5. **Anti-Loop:** Non ripetere nello stesso turno un'azione già eseguita. "
         "Riporta sempre l'esito reale delle azioni eseguite in questo turno, anche se lo stato dell'ambiente era già quello richiesto.\n"
         "Sii sintetico, chiaro e professionale."
+        + (f"\n\n### ISTRUZIONI DEL CASO DI STUDIO:\n{hints.strip()}" if hints.strip() else "")
     )
 
 # ============================================================================
@@ -80,13 +97,21 @@ def build_default_system_prompt(tools: Optional[List[BaseTool]] = None) -> str:
 class PlannerNode:
     """Generates next agent actions or responses using the LLM."""
 
-    def __init__(self, llm: Any, tools: Optional[List[BaseTool]] = None, system_prompt: Optional[str] = None):
+    def __init__(
+        self,
+        llm: Any,
+        tools: Optional[List[BaseTool]] = None,
+        system_prompt: Optional[str] = None,
+        max_steps: int = MAX_STEPS_PER_TURN,
+        hints: str = "",
+    ):
         self.llm = llm
         self.tools = tools or []
+        self.max_steps = max_steps
         self.system_prompt = (
             system_prompt
             or os.getenv("SYSTEM_PROMPT")
-            or build_default_system_prompt(self.tools)
+            or build_default_system_prompt(self.tools, hints)
         )
         self.llm_with_tools = self.llm.bind_tools(self.tools) if self.tools else self.llm
         # Same tool schemas (the history contains tool calls), but calling them is forbidden
@@ -101,6 +126,7 @@ class PlannerNode:
             messages = [SystemMessage(content=self.system_prompt)] + messages
 
         steps = state.get("planner_steps", 0)
-        llm = self.llm_final if steps >= MAX_STEPS_PER_TURN else self.llm_with_tools
+        final_only = state.get("final_answer_only") or steps >= self.max_steps
+        llm = self.llm_final if final_only else self.llm_with_tools
         response = await llm.ainvoke(messages)
         return {"messages": [response], "planner_steps": steps + 1}

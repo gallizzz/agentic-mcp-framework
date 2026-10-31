@@ -23,9 +23,9 @@ def main() -> int:
     parser.add_argument("--url", default=os.getenv("ASMETAS_URL", DEFAULT_URL))
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     args = parser.parse_args()
-    # stdout is the MCP channel: logs go to stderr only
-    logging.basicConfig(level=logging.INFO, format="%(name)s: %(message)s", stream=sys.stderr)
-    logging.getLogger("httpx").setLevel(logging.WARNING)
+    # stdout is the MCP channel: logs go to stderr only. The agent shares that stderr
+    # with its chat, so only warnings and errors are shown here.
+    logging.basicConfig(level=logging.WARNING, format="%(name)s: %(message)s", stream=sys.stderr)
 
     client = AsmetaRestClient(args.url)
     gateway = None

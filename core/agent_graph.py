@@ -15,6 +15,7 @@ from langchain_core.messages import HumanMessage
 from langchain_core.tools import BaseTool
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_mcp_adapters.client import MultiServerMCPClient
+from langchain_mcp_adapters.tools import load_mcp_tools
 from langgraph.graph import END, START, StateGraph
 from core.agent_state import AgentState
 from core.cli_formatter import (
@@ -34,9 +35,9 @@ from core.config import (
     load_use_case,
 )
 from core.environment_node import create_environment_node
-from core.formal_gate_node import FormalGateNode
+from core.formal_gate_node import FormalGateNode, SubmitCallable
 from core.mcp_utils import parse_mcp_response
-from core.planner_node import create_planner_node, planner_router
+from core.planner_node import create_planner_node, create_planner_router
 load_dotenv()
 os.environ["TZ"] = "Europe/Rome"
 if hasattr(time, "tzset"):
@@ -48,11 +49,20 @@ EXIT_COMMANDS = ("exit", "quit")
 # ROUTERS
 # ============================================================================
 
-def create_gate_router(policy: str):
+def create_gate_router(policy: str, gate_mode: str = "sanitise"):
     """Routes after Formal Gate evaluation (replan rounds are bounded by the planner)."""
 
     def gate_router(state: AgentState) -> str:
         verdict = state.get("guard_verdict")
+
+        if gate_mode == "submit":
+            # The submit tool already executed the action: only reads reach the Environment
+            if verdict == "BYPASS":
+                return "environment"
+            # BLOCKED goes back only for the final explanation (final_answer_only)
+            if verdict in ("APPROVED", "SHIELDED", "REPLAN", "BLOCKED"):
+                return "planner"
+            return END
 
         if verdict in ("APPROVED", "BYPASS") or (
             verdict == "VIOLATION" and policy == "shielding"
@@ -79,13 +89,20 @@ def build_formal_gate_graph(
     llm,
     use_case: UseCaseConfig,
     environment_tools: List[BaseTool],
-    sanitise_action_tool: Optional[Callable],
+    sanitise_action_tool: Optional[Callable] = None,
     system_prompt: Optional[str] = None,
     extra_read_only_tools: Optional[List[str]] = None,
+    submit_callable: Optional[SubmitCallable] = None,
 ):
     """Builds the pipeline graph: Planner (LLM) -> Formal Gate (AsmetaS) -> Environment."""
     builder = StateGraph(AgentState)
-    builder.add_node("planner", create_planner_node(llm, environment_tools, system_prompt))
+    builder.add_node(
+        "planner",
+        create_planner_node(
+            llm, environment_tools, system_prompt,
+            max_steps=use_case.max_steps_per_turn, hints=use_case.planner_hints,
+        ),
+    )
     builder.add_node(
         "formal_gate",
         FormalGateNode(
@@ -96,13 +113,18 @@ def build_formal_gate_graph(
             read_only_tools=_read_only_tool_names(environment_tools, extra_read_only_tools),
             action_mapping=use_case.action_mapping,
             default_monitored_vars=use_case.default_monitored_variables,
+            gate_mode=use_case.gate_mode,
+            submit_callable=submit_callable,
+            submit_tool=use_case.submit_tool,
+            submit_request_id_path=use_case.submit_request_id_path,
+            decision_mapping=use_case.decision_mapping,
         ),
     )
 
     builder.add_edge(START, "planner")
-    builder.add_conditional_edges("planner", planner_router)
+    builder.add_conditional_edges("planner", create_planner_router(use_case.max_steps_per_turn))
     builder.add_conditional_edges(
-        "formal_gate", create_gate_router(use_case.gate_policy)
+        "formal_gate", create_gate_router(use_case.gate_policy, use_case.gate_mode)
     )
 
     if environment_tools:
@@ -116,25 +138,34 @@ def build_formal_gate_graph(
 # ============================================================================
 
 def _build_mcp_config(use_case: UseCaseConfig) -> Dict[str, Dict[str, Any]]:
-    """Builds the stdio configuration for the Environment and AsmetaS MCP servers."""
+    """Builds the stdio configuration for the Environment and AsmetaS MCP servers.
+
+    In submit mode the use-case server talks to AsmetaS itself: no adapter server.
+    """
     env_cmd, *env_args = use_case.environment_mcp_command
-    asmetas_cmd, *asmetas_args = ASMETAS_MCP_COMMAND
-    return {
+    asmetas_url = os.getenv("ASMETAS_URL", "http://localhost:8080")
+    config = {
         "environment_server": {
             "command": env_cmd,
             "args": env_args,
             "transport": "stdio",
-        },
-        "asmetas_server": {
-            "command": asmetas_cmd,
-            "args": asmetas_args,
-            "transport": "stdio",
-            "env": {
-                "ASMETAS_URL": os.getenv("ASMETAS_URL", "http://localhost:8080"),
-                "ASMETA_MODEL_NAME": use_case.asm_model_name,
-            },
+            "env": {"ASMETAS_URL": asmetas_url},
         },
     }
+    if use_case.gate_mode == "submit":
+        return config
+
+    asmetas_cmd, *asmetas_args = ASMETAS_MCP_COMMAND
+    config["asmetas_server"] = {
+        "command": asmetas_cmd,
+        "args": asmetas_args,
+        "transport": "stdio",
+        "env": {
+            "ASMETAS_URL": asmetas_url,
+            "ASMETA_MODEL_NAME": use_case.asm_model_name,
+        },
+    }
+    return config
 
 async def _verify_asmetas_model(list_models_tool: Optional[BaseTool], model_name: str):
     """Verifies that the formal model is already available on the AsmetaS web service."""
@@ -157,10 +188,59 @@ async def _verify_asmetas_model(list_models_tool: Optional[BaseTool], model_name
 
 @asynccontextmanager
 async def setup_mcp_and_enforcer_session(use_case: UseCaseConfig):
-    """Context manager to initialize MCP servers, start AsmetaS enforcer,
+    """Context manager that starts the MCP servers and verifies the enforcer (fail-fast)."""
+    setup = _submit_session if use_case.gate_mode == "submit" else _sanitise_session
+    async with setup(use_case) as session:
+        yield session
 
-    and handle cleanup gracefully on exit.
+@asynccontextmanager
+async def _submit_session(use_case: UseCaseConfig):
+    """Submit mode: ONE persistent session with the use-case server for the whole chat.
+
+    The server keeps the live system and the enforcement state in memory, so it must
+    not be restarted on every tool call (the default of MultiServerMCPClient.get_tools).
     """
+    client = MultiServerMCPClient(_build_mcp_config(use_case))
+    started = False
+    try:
+        async with client.session("environment_server") as mcp_session:
+            environment_tools = await load_mcp_tools(mcp_session, server_name="environment_server")
+            tool_names = {t.name for t in environment_tools}
+            if use_case.submit_tool not in tool_names:
+                raise RuntimeError(f"Submit tool '{use_case.submit_tool}' missing from the use-case server.")
+            if use_case.health_tool not in _read_only_tool_names(environment_tools):
+                raise RuntimeError(f"Health tool '{use_case.health_tool}' missing or not declared read-only.")
+
+            health = await mcp_session.call_tool(use_case.health_tool, {})
+            health_data, health_raw = parse_mcp_response(
+                [{"text": getattr(c, "text", "")} for c in health.content]
+            )
+            if health.isError or health_data.get("status") in ("recovery_required", "error"):
+                raise RuntimeError(f"Enforcement server not ready: {health_data.get('reason', health_raw)}")
+            print_success(f"Enforcement server ready ('{use_case.health_tool}' answered).")
+
+            async def submit(args: Dict[str, Any]) -> tuple[bool, str]:
+                result = await mcp_session.call_tool(use_case.submit_tool, args)
+                text = "\n".join(getattr(c, "text", "") for c in result.content)
+                return bool(result.isError), text
+
+            started = True
+            yield {"environment_tools": environment_tools, "submit_callable": submit}
+    except Exception as e:
+        if started or isinstance(e, RuntimeError):
+            raise
+        # A server that exits during startup (AsmetaS offline, model not loadable) closes the pipe
+        cause = e
+        while isinstance(cause, BaseExceptionGroup) and cause.exceptions:
+            cause = cause.exceptions[0]
+        raise RuntimeError(
+            f"Use-case MCP server failed to start ({cause or type(cause).__name__});"
+            " see its log above (AsmetaS unreachable or a model not loadable)."
+        ) from e
+
+@asynccontextmanager
+async def _sanitise_session(use_case: UseCaseConfig):
+    """Sanitise mode: AsmetaS adapter server + environment server, enforcer session started here."""
     model_name = use_case.asm_model_name
     client = MultiServerMCPClient(_build_mcp_config(use_case))
 
@@ -226,6 +306,7 @@ def _initial_state(user_input: str) -> AgentState:
         "sanitised_action": None,
         "guard_feedback": None,
         "planner_steps": 0,
+        "final_answer_only": False,
         "execution_id": None,
         "action_history": [],
     }
@@ -247,8 +328,9 @@ async def main():
                 llm=llm,
                 use_case=use_case,
                 environment_tools=session["environment_tools"],
-                sanitise_action_tool=session["sanitise_tool"],
+                sanitise_action_tool=session.get("sanitise_tool"),
                 extra_read_only_tools=_read_only_tools_from_env(),
+                submit_callable=session.get("submit_callable"),
             )
 
             print_ready_prompt()

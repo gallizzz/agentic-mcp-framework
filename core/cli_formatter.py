@@ -67,7 +67,10 @@ def get_status_spinner(message: str = "Processing..."):
 # GRAPH STEP RENDERING
 # ============================================================================
 
-_VERDICT_STYLES = {"APPROVED": "green", "VIOLATION": "yellow", "ERROR": "red"}
+_VERDICT_STYLES = {
+    "APPROVED": "green", "VIOLATION": "yellow", "ERROR": "red",
+    "SHIELDED": "yellow", "REPLAN": "yellow", "BLOCKED": "red",
+}
 
 def _render_planner(update: Dict[str, Any]) -> None:
     msgs = update.get("messages", [])
@@ -91,7 +94,7 @@ def _render_formal_gate(update: Dict[str, Any]) -> None:
     elif verdict in _VERDICT_STYLES:
         style = _VERDICT_STYLES[verdict]
         message = f"Verdict: [bold {style}]{verdict}[/bold {style}] | "
-        if verdict == "VIOLATION":
+        if verdict in ("VIOLATION", "SHIELDED"):
             sanitised = update.get("sanitised_action")
             message += (
                 f"Shielded to: {sanitised.get('args') if sanitised else 'None'}\n"
