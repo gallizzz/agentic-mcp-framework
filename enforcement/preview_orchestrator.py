@@ -1,12 +1,9 @@
 """Execute candidate + residual actions; the coordinator ASM decides the verdict."""
 
 import logging
-
 from .asm_runtime import ASMRuntimeAdapter, Snapshot
 from .contracts import Action, AsmError, ModelBinding, PreviewRequest, PreviewResult
-
 logger = logging.getLogger(__name__)
-
 
 class PreviewOrchestrator:
     def __init__(self, runtime: ASMRuntimeAdapter, binding: ModelBinding):

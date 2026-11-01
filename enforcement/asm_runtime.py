@@ -5,11 +5,8 @@ from dataclasses import dataclass, field
 import hashlib
 import logging
 from pathlib import Path
-
 from .contracts import AsmError, AsmService, AsmState
-
 logger = logging.getLogger(__name__)
-
 
 @dataclass
 class Session:
@@ -18,14 +15,12 @@ class Session:
     history: list[dict[str, str]] = field(default_factory=list)
     state: AsmState | None = None
 
-
 @dataclass
 class Snapshot:
     model_name: str
     history: list[dict[str, str]]
     state: AsmState
     sources_hash: str
-
 
 class ASMRuntimeAdapter:
     def __init__(self, service: AsmService, models_folder: Path, max_replay_steps: int = 1000):

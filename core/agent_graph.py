@@ -167,11 +167,8 @@ def _build_mcp_config(use_case: UseCaseConfig) -> Dict[str, Dict[str, Any]]:
     }
     return config
 
-async def _verify_asmetas_model(list_models_tool: Optional[BaseTool], model_name: str):
+async def _verify_asmetas_model(list_models_tool: BaseTool, model_name: str):
     """Verifies that the formal model is already available on the AsmetaS web service."""
-    if not list_models_tool:
-        return
-
     models_data, models_raw = parse_mcp_response(await list_models_tool.ainvoke({}))
 
     if models_data.get("status") == "error":
@@ -256,14 +253,15 @@ async def _sanitise_session(use_case: UseCaseConfig):
     tools_by_name = {t.name: t for t in asmetas_tools}
     sanitise_tool = tools_by_name.get("sanitise_action")
     start_tool = tools_by_name.get("start_enforcer")
+    list_models_tool = tools_by_name.get("list_models")
     stop_tool = tools_by_name.get("stop_enforcer")
 
-    if not sanitise_tool or not start_tool:
+    if not sanitise_tool or not start_tool or not list_models_tool:
         raise RuntimeError(
-            "Essential Formal Gate tools (sanitise_action, start_enforcer) missing from server."
+            "Essential Formal Gate tools (sanitise_action, start_enforcer, list_models) missing from server."
         )
 
-    await _verify_asmetas_model(tools_by_name.get("list_models"), model_name)
+    await _verify_asmetas_model(list_models_tool, model_name)
 
     init_data, _ = parse_mcp_response(await start_tool.ainvoke({"asm_name": model_name}))
     if init_data.get("status") == "error":
@@ -301,14 +299,11 @@ def _initial_state(user_input: str) -> AgentState:
     return {
         "messages": [HumanMessage(content=user_input)],
         "candidate_action": None,
-        "monitored_variables": {},
         "guard_verdict": None,
         "sanitised_action": None,
         "guard_feedback": None,
         "planner_steps": 0,
         "final_answer_only": False,
-        "execution_id": None,
-        "action_history": [],
     }
 
 async def main():

@@ -4,13 +4,10 @@ from copy import deepcopy
 from dataclasses import asdict
 import logging
 from threading import RLock
-
 from .asm_runtime import ASMRuntimeAdapter
 from .contracts import AsmError, ModelBinding, Plan
 from .preview_orchestrator import PreviewOrchestrator
-
 logger = logging.getLogger(__name__)
-
 
 class EnforcementGateway:
     def __init__(self, runtime: ASMRuntimeAdapter, binding: ModelBinding):

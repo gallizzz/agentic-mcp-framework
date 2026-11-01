@@ -2,19 +2,13 @@
 
 import logging
 from pathlib import Path
-
 from .contracts import AsmError
 from .rest_client import AsmetaRestClient
-
 logger = logging.getLogger(__name__)
-
 
 def deploy(client: AsmetaRestClient, models: list[Path], libraries: list[Path],
            require_idle: bool = False) -> list[str]:
     """Makes the service hold the given sources; returns the uploaded file names.
-
-    Libraries go to the service's models folder too: the parser resolves an
-    `import StandardLibrary` relative to the importing model.
 
     On an idle service every file is uploaded, replacing same-name files, so the
     service matches the local sources. With active sessions only missing files

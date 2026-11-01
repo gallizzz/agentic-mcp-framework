@@ -55,13 +55,6 @@ class EnvironmentNode:
             "type": "tool_call",
         }])
 
-        # Record action in state audit log
-        result["action_history"] = list(state.get("action_history") or []) + [{
-            "action": executed_action,
-            "status": "EXECUTED",
-            "verdict": guard_verdict,
-        }]
-
         # State the gate verdict explicitly so the Planner never has to infer it
         for msg in result.get("messages") or []:
             if guard_verdict == "VIOLATION":

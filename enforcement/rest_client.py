@@ -5,13 +5,9 @@ No AsmetaComp, Java bridge, generated scripts, or automatic write retries.
 
 import logging
 from pathlib import Path
-
 import httpx
-
 from .contracts import AsmError, AsmState
-
 logger = logging.getLogger(__name__)
-
 
 class AsmetaRestClient:
     def __init__(self, base_url: str, timeout: float = 30.0):

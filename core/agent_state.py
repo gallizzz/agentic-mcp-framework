@@ -18,7 +18,6 @@ class AgentState(TypedDict):
     sanitised_action: Optional[Dict[str, Any]]
 
     # Formal gate evaluation
-    monitored_variables: Dict[str, str]
     guard_verdict: Optional[
         Literal["APPROVED", "VIOLATION", "ERROR", "BYPASS", "SHIELDED", "REPLAN", "BLOCKED"]
     ]
@@ -27,7 +26,3 @@ class AgentState(TypedDict):
     # Execution controls & limits
     planner_steps: int
     final_answer_only: bool  # set by the gate: the Planner may only reply, never act
-    execution_id: Optional[str]
-
-    # Audit history
-    action_history: List[Dict[str, Any]]

@@ -4,19 +4,15 @@ from dataclasses import dataclass, field
 import json
 import re
 from typing import Any, Protocol
-
 from pydantic import BaseModel, ConfigDict, Field
-
 
 class AsmError(RuntimeError):
     """The service or the execution protocol did not provide valid evidence."""
-
 
 class Action(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     kind: str
     parameters: dict[str, Any]
-
 
 class Plan(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
@@ -24,7 +20,6 @@ class Plan(BaseModel):
     expected_version: int = Field(ge=0)
     actions: list[Action] = Field(min_length=1, max_length=32)
     goals: dict[str, Any] = Field(default_factory=dict)
-
 
 @dataclass
 class AsmState:
@@ -58,7 +53,6 @@ class AsmState:
             raise AsmError(f"Expected Seq(Natural) for {name}, got {value!r}")
         return json.loads(re.sub(r"(\d)n\b", r"\1", value))
 
-
 @dataclass
 class Command:
     command_id: int
@@ -66,14 +60,12 @@ class Command:
     action: Action
     inputs: dict[str, str]
 
-
 @dataclass
 class PreviewRequest:
     request_id: int
     base_version: int
     candidate: Action
     metadata: dict[str, str]
-
 
 @dataclass
 class PreviewResult:
@@ -83,7 +75,6 @@ class PreviewResult:
     feedback: dict[str, str]
     observations: list[dict] = field(default_factory=list)
 
-
 @dataclass
 class EnforcerOutput:
     request_id: int
@@ -92,7 +83,6 @@ class EnforcerOutput:
     command: Command | None = None
     preview_request: PreviewRequest | None = None
 
-
 class AsmService(Protocol):
     """Operations required of a runtime. The supplied client uses REST only."""
 
@@ -100,7 +90,6 @@ class AsmService(Protocol):
     def step(self, session_id: int, inputs: dict[str, str]) -> AsmState: ...
     def read(self, session_id: int) -> AsmState: ...
     def stop(self, session_id: int) -> None: ...
-
 
 class ModelBinding(Protocol):
     """Translate application data to/from ASM I/O, without deciding safety.
