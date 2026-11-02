@@ -38,6 +38,8 @@ from core.environment_node import create_environment_node
 from core.formal_gate_node import FormalGateNode, SubmitCallable
 from core.mcp_utils import parse_mcp_response
 from core.planner_node import create_planner_node, create_planner_router
+from enforcement.deploy import deploy
+from enforcement.rest_client import AsmetaRestClient
 load_dotenv()
 os.environ["TZ"] = "Europe/Rome"
 if hasattr(time, "tzset"):
@@ -167,8 +169,16 @@ def _build_mcp_config(use_case: UseCaseConfig) -> Dict[str, Dict[str, Any]]:
     }
     return config
 
+def _deploy_asm_sources(use_case: UseCaseConfig) -> None:
+    """Uploads the use case's ASM sources to AsmetaS (raises if unreachable or not retained)."""
+    client = AsmetaRestClient(os.getenv("ASMETAS_URL", "http://localhost:8080"))
+    try:
+        deploy(client, list(use_case.asm_sources), [])
+    finally:
+        client.close()
+
 async def _verify_asmetas_model(list_models_tool: BaseTool, model_name: str):
-    """Verifies that the formal model is already available on the AsmetaS web service."""
+    """Verifies that the formal model is available on the AsmetaS web service."""
     models_data, models_raw = parse_mcp_response(await list_models_tool.ainvoke({}))
 
     if models_data.get("status") == "error":
@@ -179,7 +189,7 @@ async def _verify_asmetas_model(list_models_tool: BaseTool, model_name: str):
     if model_name not in models_data.get("models", []):
         raise RuntimeError(
             f"Formal model '{model_name}' is not present on AsmetaS"
-            " server. Load it on the web service before starting the agent."
+            " server after the upload. Check `asm_sources` in the use case."
         )
     print_info(f"Model '{model_name}' confirmed on AsmetaS server.")
 
@@ -261,6 +271,7 @@ async def _sanitise_session(use_case: UseCaseConfig):
             "Essential Formal Gate tools (sanitise_action, start_enforcer, list_models) missing from server."
         )
 
+    _deploy_asm_sources(use_case)
     await _verify_asmetas_model(list_models_tool, model_name)
 
     init_data, _ = parse_mcp_response(await start_tool.ainvoke({"asm_name": model_name}))

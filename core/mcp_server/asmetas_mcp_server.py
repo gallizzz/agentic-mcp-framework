@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 import httpx
 logging.getLogger("mcp").setLevel(logging.WARNING)
+logging.getLogger("httpx").setLevel(logging.WARNING)
 try:
     from mcp.server.mcpserver import MCPServer
 except ModuleNotFoundError:

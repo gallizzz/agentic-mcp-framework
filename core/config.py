@@ -22,7 +22,8 @@ class UseCaseConfig:
     """Everything the engine needs to know about a specific case study.
 
     gate_mode "sanitise": the Formal Gate asks AsmetaS (via the adapter MCP server)
-    whether an action is allowed; the Environment then executes it.
+    whether an action is allowed; the Environment then executes it. The engine uploads
+    `asm_sources` at startup; libraries go with them, imported as `import StandardLibrary`.
     gate_mode "submit": the Formal Gate sends the action to `submit_tool` of the
     use-case MCP server, which verifies it with its ASM models, executes it and
     returns a decision; `decision_mapping` translates that decision into a verdict.
@@ -34,6 +35,7 @@ class UseCaseConfig:
 
     # sanitise mode
     asm_model_name: Optional[str] = None
+    asm_sources: List[Path] = field(default_factory=list)  # uploaded to AsmetaS at startup
     default_safe_action: Optional[str] = None
     action_mapping: Dict[str, str] = field(default_factory=dict)
     default_monitored_variables: Dict[str, str] = field(default_factory=dict)
@@ -48,7 +50,7 @@ class UseCaseConfig:
 
     def __post_init__(self):
         if self.gate_mode == "sanitise":
-            required = ("asm_model_name", "default_safe_action")
+            required = ("asm_model_name", "asm_sources", "default_safe_action")
         elif self.gate_mode == "submit":
             required = ("submit_tool", "health_tool", "decision_mapping")
         else:
