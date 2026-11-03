@@ -1,5 +1,5 @@
 {
-  "request_id": "compatible-residual",
+  "request_id": "M1",
   "expected_version": 0,
   "actions": [
     {
@@ -8,14 +8,6 @@
         "compartment": "compartment2",
         "dose_index": 0,
         "time": 1050
-      }
-    },
-    {
-      "kind": "reschedule",
-      "parameters": {
-        "compartment": "compartment2",
-        "dose_index": 1,
-        "time": 1160
       }
     }
   ],

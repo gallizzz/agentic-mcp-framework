@@ -1,5 +1,5 @@
 {
-  "request_id": "transient-conflict",
+  "request_id": "M2-A",
   "expected_version": 0,
   "actions": [
     {
@@ -16,14 +16,6 @@
         "compartment": "compartment2",
         "dose_index": 1,
         "time": 1100
-      }
-    },
-    {
-      "kind": "reschedule",
-      "parameters": {
-        "compartment": "compartment2",
-        "dose_index": 1,
-        "time": 1140
       }
     }
   ],

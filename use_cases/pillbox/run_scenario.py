@@ -1,7 +1,7 @@
 """Runs pillbox scenarios from JSON, without the LLM agent (controlled experiments).
 
     python use_cases/pillbox/run_scenario.py deploy
-    python use_cases/pillbox/run_scenario.py run use_cases/pillbox/scenarios/compatible_repair.json
+    python use_cases/pillbox/run_scenario.py run use_cases/pillbox/scenarios/M1.json
 """
 
 import argparse
@@ -23,7 +23,7 @@ def main() -> int:
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("deploy", help="Upload all configured models to an idle service")
     run = commands.add_parser("run", help="Execute one plan in a fresh simulated live session")
-    run.add_argument("plan", type=Path, help="JSON plan, e.g. use_cases/pillbox/scenarios/compatible_repair.json")
+    run.add_argument("plan", type=Path, help="JSON plan, e.g. use_cases/pillbox/scenarios/M1.json")
     run.add_argument("--output", type=Path, help="Optional result JSON file")
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(name)s: %(message)s")
