@@ -6,6 +6,15 @@ import re
 from typing import Any, Protocol
 from pydantic import BaseModel, ConfigDict, Field
 
+# Used when ASMETAS_URL is not set
+DEFAULT_URL = "http://localhost:8080"
+
+# Contract between the enforcement MCP server and the agent's Formal Gate
+SUBMIT_TOOL = "submit_plan"
+SUBMIT_ARGUMENT = "submission"  # name of the Plan parameter of SUBMIT_TOOL
+STATE_TOOL = "get_system_state"
+FINAL_DECISIONS = ("ALLOW", "REPLACE", "REPLAN", "BLOCK")
+
 class AsmError(RuntimeError):
     """The service or the execution protocol did not provide valid evidence."""
 

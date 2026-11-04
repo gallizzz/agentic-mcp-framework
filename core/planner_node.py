@@ -6,7 +6,7 @@ LangGraph planner node for LLM reasoning and candidate action proposal.
 from __future__ import annotations
 import os
 from typing import Any, Dict, List, Optional
-from langchain_core.messages import SystemMessage
+from langchain_core.messages import AnyMessage, SystemMessage, ToolMessage
 from langchain_core.tools import BaseTool
 from langgraph.graph import END
 from core.agent_state import AgentState
@@ -46,6 +46,21 @@ def create_planner_router(max_steps: int = MAX_STEPS_PER_TURN):
 
     return planner_router
 
+def _answer_pending_tool_calls(messages: List[AnyMessage]) -> List[AnyMessage]:
+    """Answers tool calls left without a result by a turn that ended early, as the LLM requires."""
+    answered = {m.tool_call_id for m in messages if isinstance(m, ToolMessage)}
+    result = []
+    for message in messages:
+        result.append(message)
+        for tc in getattr(message, "tool_calls", None) or []:
+            if tc.get("id") not in answered:
+                result.append(ToolMessage(
+                    content="[Formal Gate] Not executed: the turn ended before this action was evaluated.",
+                    tool_call_id=tc.get("id"),
+                    status="error",
+                ))
+    return result
+
 def build_default_system_prompt(tools: Optional[List[BaseTool]] = None, hints: str = "") -> str:
     """Builds a dynamic, generic system prompt for the planner LLM, injecting available tools."""
     if tools:
@@ -64,16 +79,15 @@ def build_default_system_prompt(tools: Optional[List[BaseTool]] = None, hints: s
         "1. **Interazione con l'Ambiente:** Quando l'utente richiede un'operazione o fornisce comandi, "
         "utilizza esclusivamente gli strumenti disponibili, rispettando scrupolosamente i tipi, le descrizioni e i vincoli "
         "dei parametri descritti nei rispettivi schemi.\n"
-        "2. **Ciclo Percezione-Azione e Aggiornamento Contesto:**\n"
-        "   - Se ti servono informazioni sullo stato dell'ambiente e hai a disposizione tool di lettura/ispezione, invocali per verificare lo stato.\n"
-        "   - **Priorità delle condizioni indicate dall'utente:** Se l'utente specifica o dichiara esplicitamente nel messaggio lo stato di un sensore, una lettura o una condizione ambientale (es. per simulare o comunicare una variazione del contesto), imposta il relativo parametro con il valore indicato dall'utente, dando priorità a tale specifica rispetto a letture storiche o telemetrie precedenti.\n"
+        "2. **Ciclo Percezione-Azione:** Se ti servono informazioni sullo stato dell'ambiente e hai a disposizione tool di lettura/ispezione, invocali per verificare lo stato. "
+        "Le letture dei messaggi precedenti possono essere superate: prima di agire rileggi lo stato.\n"
         "3. **Formal Gate & Shielding:** Tutte le azioni verso l'ambiente sono intercettate ed esaminate da un enforcer formale (Formal Gate). "
         "L'esito della verifica è riportato all'inizio del risultato del tool, ed è l'unica fonte da usare per descriverlo.\n"
         "   - `[FORMAL GATE: APPROVED]`: l'azione è stata verificata ed eseguita esattamente come proposta. "
-        "Riporta l'esito senza affermare che il Formal Gate sia intervenuto, anche se i valori dei sensori ti sembrano sfavorevoli: "
+        "Riporta l'esito senza affermare che il Formal Gate sia intervenuto, anche se lo stato ti sembra sfavorevole:"
         "la valutazione di sicurezza spetta esclusivamente al Formal Gate.\n"
         "   - `[FORMAL GATE INTERVENTION - SHIELDING APPLIED]`: l'azione originariamente proposta violava le proprietà formali "
-        "di sicurezza ed è stata sostituita con un'azione sicura. DEVI spiegare all'utente in modo trasparente che l'azione richiesta "
+        "di sicurezza ed è stata sostituita con un'azione sicura. Nella risposta finale DEVI spiegare all'utente in modo trasparente che l'azione richiesta "
         "NON è stata eseguita nella forma originale, specificando l'azione sicura eseguita e la motivazione. "
         "È TASSATIVAMENTE VIETATO affermare che l'azione originariamente richiesta ha avuto successo.\n"
         "   - `[FORMAL GATE: REPLAN]`: l'azione NON è stata eseguita e lo stato non è cambiato. Usa il motivo indicato "
@@ -120,7 +134,7 @@ class PlannerNode:
         )
 
     async def __call__(self, state: AgentState) -> Dict[str, Any]:
-        messages = list(state.get("messages", []))
+        messages = _answer_pending_tool_calls(list(state.get("messages", [])))
         # Ensure system prompt is prepended once
         if self.system_prompt and (not messages or not isinstance(messages[0], SystemMessage)):
             messages = [SystemMessage(content=self.system_prompt)] + messages

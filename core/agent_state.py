@@ -13,13 +13,13 @@ class AgentState(TypedDict):
     # Conversation state
     messages: Annotated[List[AnyMessage], add_messages]
 
-    # Candidate and sanitised action payloads
+    # Action proposed by the Planner and action actually executed
     candidate_action: Optional[Dict[str, Any]]
-    sanitised_action: Optional[Dict[str, Any]]
+    executed_action: Optional[Dict[str, Any]]
 
     # Formal gate evaluation
     guard_verdict: Optional[
-        Literal["APPROVED", "VIOLATION", "ERROR", "BYPASS", "SHIELDED", "REPLAN", "BLOCKED"]
+        Literal["APPROVED", "ERROR", "BYPASS", "SHIELDED", "REPLAN", "BLOCKED"]
     ]
     guard_feedback: Optional[str]
 

@@ -3,8 +3,10 @@
 Handles Rich styling, step rendering, text extraction, and status banners.
 """
 
+import sys
 import time
 from typing import Any, Dict
+from prompt_toolkit import PromptSession
 from rich.console import Console
 from rich.markdown import Markdown
 from rich.panel import Panel
@@ -27,6 +29,25 @@ def extract_text_content(content: Any) -> str:
     return str(content).strip()
 
 # ============================================================================
+# USER INPUT
+# ============================================================================
+
+class UserPrompt:
+    """Reads one user message.
+
+    In a terminal, pasted text stays a single message (even with line breaks) until
+    Enter is pressed. Piped input is read line by line.
+    """
+
+    def __init__(self):
+        self._session = PromptSession() if sys.stdin.isatty() else None
+
+    async def read(self) -> str:
+        if self._session:
+            return await self._session.prompt_async("\nYou: ")
+        return input("\nYou: ")
+
+# ============================================================================
 # STATUS MESSAGES
 # ============================================================================
 
@@ -34,7 +55,7 @@ def print_banner():
     console.print(
         Panel.fit(
             "[bold cyan]LangGraph Formal Gate[/bold cyan]\n"
-            "[dim]Planner (LLM) -> Formal Gate (AsmetaS) -> Environment[/dim]",
+            "[dim]Planner (LLM) -> Formal Gate -> Enforcement (AsmetaS)[/dim]",
             border_style="cyan",
         )
     )
@@ -68,7 +89,7 @@ def get_status_spinner(message: str = "Processing..."):
 # ============================================================================
 
 _VERDICT_STYLES = {
-    "APPROVED": "green", "VIOLATION": "yellow", "ERROR": "red",
+    "APPROVED": "green", "ERROR": "red",
     "SHIELDED": "yellow", "REPLAN": "yellow", "BLOCKED": "red",
 }
 
@@ -94,10 +115,10 @@ def _render_formal_gate(update: Dict[str, Any]) -> None:
     elif verdict in _VERDICT_STYLES:
         style = _VERDICT_STYLES[verdict]
         message = f"Verdict: [bold {style}]{verdict}[/bold {style}] | "
-        if verdict in ("VIOLATION", "SHIELDED"):
-            sanitised = update.get("sanitised_action")
+        if verdict == "SHIELDED":
+            executed = update.get("executed_action")
             message += (
-                f"Shielded to: {sanitised.get('args') if sanitised else 'None'}\n"
+                f"Shielded to: {executed.get('args') if executed else 'None'}\n"
                 f"    [dim]Feedback: {feedback}[/dim]"
             )
         else:

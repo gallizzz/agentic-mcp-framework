@@ -5,7 +5,7 @@ from dataclasses import asdict
 import logging
 from threading import RLock
 from .asm_runtime import ASMRuntimeAdapter
-from .contracts import AsmError, ModelBinding, Plan
+from .contracts import FINAL_DECISIONS, AsmError, ModelBinding, Plan
 from .preview_orchestrator import PreviewOrchestrator
 logger = logging.getLogger(__name__)
 
@@ -144,7 +144,7 @@ class EnforcementGateway:
 
                 if output.request_id != command_id:
                     raise AsmError("Final decision belongs to another request")
-                if output.decision not in ("ALLOW", "REPLACE", "REPLAN", "BLOCK"):
+                if output.decision not in FINAL_DECISIONS:
                     raise AsmError("Enforcer has not returned a final decision")
                 success = output.decision in ("ALLOW", "REPLACE")
                 if success != commit_applied:
