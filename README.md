@@ -48,7 +48,7 @@ USE_CASE=vehicle
 
 ### 3. Avvia il server formale AsmetaS
 
-Segui il README.md del progetto [AsmetaS-web-service](https://github.com/foselab/AsmetaS-web-service) fino ad avviare lo script main.py del toy_example.
+Avvia il server seguendo il README.md del progetto [AsmetaS-web-service](https://github.com/foselab/AsmetaS-web-service). Non serve caricare modelli a mano: l'agente carica all'avvio quelli del caso di studio scelto, leggendoli da `resources/`.
 
 ---
 
@@ -128,7 +128,8 @@ Credenziali, parametri di connessione e selezione del caso di studio:
 
 ### Configurazione del Caso di Studio (`use_cases/<nome>/config.py`)
 Ogni caso di studio definisce `USE_CASE = UseCaseConfig(...)` con:
-* **`asm_model_name`**: Nome del modello formale registrato su AsmetaS (per il veicolo `SafetyEnforcerModel.asm`).
+* **`asm_model_name`**: Nome del modello formale registrato su AsmetaS (per il veicolo `vehicleEnforcer.asm`).
+* **`asm_sources`**: File `.asm` di `resources/` che l'agente carica su AsmetaS all'avvio (modello e libreria).
 * **`environment_mcp_command`**: Comando stdio del server MCP dell'ambiente.
 * **`default_safe_action`**: Azione eseguita in modalità fail-safe; deve essere accettata sia dall'ambiente sia dal dominio `inputAction` dell'ASM.
 * **`action_mapping`**: Mappatura tra le azioni dell'ambiente e quelle del modello ASM (per il veicolo `{"KEEP": "IDLE"}`).

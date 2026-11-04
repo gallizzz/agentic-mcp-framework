@@ -1,0 +1,18 @@
+{
+  "asmeta": {
+    "models_path": "../../resources/models",
+    "libraries_path": "../../resources/libraries",
+    "models": ["scheduler.asm", "PreviewCoordinator.asm", "pillboxDevice.asm", "configurationMgr.asm", "knowledge.asm"],
+    "libraries": ["StandardLibrary.asm"]
+  },
+  "system_time": 350,
+  "compartments": ["compartment1", "compartment2"],
+  "windows": {
+    "compartment1": [[0, 1439]],
+    "compartment2": [[960, 1080], [0, 1439]]
+  },
+  "preview_min_gap": {
+    "compartment1": {"compartment1": 360, "compartment2": 360},
+    "compartment2": {"compartment1": 360, "compartment2": 120}
+  }
+}
