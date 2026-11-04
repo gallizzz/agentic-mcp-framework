@@ -3,19 +3,15 @@
 Describes the structure of the agent's state.
 """
 
-from typing import Annotated, Any, Dict, List, Literal, Optional, TypedDict
+from typing import Annotated, List, Literal, Optional, TypedDict
 from langchain_core.messages import AnyMessage
 from langgraph.graph.message import add_messages
 
 class AgentState(TypedDict):
-    """LangGraph state tracking reasoning, candidate actions, and formal verdicts."""
+    """LangGraph state tracking the conversation and the formal verdicts."""
 
     # Conversation state
     messages: Annotated[List[AnyMessage], add_messages]
-
-    # Action proposed by the Planner and action actually executed
-    candidate_action: Optional[Dict[str, Any]]
-    executed_action: Optional[Dict[str, Any]]
 
     # Formal gate evaluation
     guard_verdict: Optional[

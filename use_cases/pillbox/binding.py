@@ -54,6 +54,10 @@ PREVIEW_FEEDBACK = (
 )
 
 
+def hhmm(minutes: int) -> str:
+    return f"{minutes // 60:02d}:{minutes % 60:02d}"
+
+
 def select(values: dict[str, str], names: set[str]) -> dict[str, str]:
     return {key: value for key, value in values.items() if key.split("(")[0] in names}
 
@@ -106,9 +110,11 @@ class PillboxBinding:
         return state.integer("scheduleVersion")
 
     def summary(self, state: AsmState) -> dict:
+        schedule = {c: state.sequence(f"time_consumption({c})") for c in self.compartments}
         return {
             "version": self.version(state),
-            "schedule": {c: state.sequence(f"time_consumption({c})") for c in self.compartments},
+            "schedule": schedule,
+            "schedule_hhmm": {c: [hhmm(t) for t in times] for c, times in schedule.items()},
             "last_applied_command": {c: state.integer(f"lastAppliedCommandId({c})") for c in self.compartments},
             "last_rejected_command": {c: state.integer(f"lastRejectedCommandId({c})") for c in self.compartments},
         }

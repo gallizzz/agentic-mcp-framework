@@ -9,7 +9,8 @@ USE_CASE_DIR = Path(__file__).resolve().parent
 PLANNER_HINTS = """\
 - Il sistema è un portapillole con due scomparti (dati sintetici): `compartment1` contiene fosamax, `compartment2` contiene sumatriptan.
 - L'utente conosce solo i nomi dei farmaci e non sa nulla di scomparti e indici. Traduci tu il farmaco nello scomparto e "prima dose", "seconda dose" nell'indice (la prima è l'indice 0). Nelle risposte parla sempre di farmaci, dosi e orari in formato HH:MM: non nominare mai `compartment1`, `compartment2`, gli indici o gli orari in minuti.
-- Gli orari sono minuti dalla mezzanotte (0-1439): ad esempio 17:30 = 1050, 19:00 = 1140. Gli indici delle dosi partono da 0.
+- Negli strumenti gli orari sono minuti dalla mezzanotte (0-1439): ad esempio 17:30 = 1050, 19:00 = 1140. Gli indici delle dosi partono da 0.
+- Non convertire mai i minuti in orari da solo: per dire all'utente gli orari attuali copiali da `schedule_hhmm`, che trovi in `get_system_state` e nel `system_state` dell'esito di `submit_plan`.
 - Prima di proporre una modifica leggi lo stato con `get_system_state`: ti servono la versione (`version`) e gli orari attuali.
 - Per modificare lo schedule usa `submit_plan`; `submission` contiene SOLO questi quattro campi, senza aggiungerne altri:
   - `request_id`: una stringa qualsiasi, viene sostituita automaticamente;
@@ -33,7 +34,7 @@ PLANNER_HINTS = """\
 """
 
 USE_CASE = UseCaseConfig(
-    environment_mcp_command=[sys.executable, str(USE_CASE_DIR / "mcp_server.py")],
+    mcp_server_command=[sys.executable, str(USE_CASE_DIR / "mcp_server.py")],
     max_steps_per_turn=6,
     planner_hints=PLANNER_HINTS,
 )

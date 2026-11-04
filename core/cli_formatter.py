@@ -13,7 +13,7 @@ from rich.panel import Panel
 
 console = Console()
 
-ENV_OUTPUT_MAX_LEN = 200
+READ_OUTPUT_MAX_LEN = 200
 
 def _log(message: str, style: str) -> None:
     console.print(f"[{time.strftime('%X')}] {message}", style=style)
@@ -106,36 +106,26 @@ def _render_planner(update: Dict[str, Any]) -> None:
             console.print()
             console.print(Markdown(text))
 
+def _render_read_result(tool_msg: Any) -> None:
+    content = extract_text_content(tool_msg.content)
+    if len(content) > READ_OUTPUT_MAX_LEN:
+        content = content[:READ_OUTPUT_MAX_LEN] + "..."
+    _log(content, "dim green")
+
 def _render_formal_gate(update: Dict[str, Any]) -> None:
     verdict = update.get("guard_verdict")
     feedback = update.get("guard_feedback")
 
     if verdict == "BYPASS":
         _log(f"Bypass: {feedback}", "dim")
+        _render_read_result(update["messages"][0])
     elif verdict in _VERDICT_STYLES:
         style = _VERDICT_STYLES[verdict]
-        message = f"Verdict: [bold {style}]{verdict}[/bold {style}] | "
-        if verdict == "SHIELDED":
-            executed = update.get("executed_action")
-            message += (
-                f"Shielded to: {executed.get('args') if executed else 'None'}\n"
-                f"    [dim]Feedback: {feedback}[/dim]"
-            )
-        else:
-            message += str(feedback)
-        _log(message, style)
-
-def _render_environment(update: Dict[str, Any]) -> None:
-    for tool_msg in update.get("messages", []):
-        content = extract_text_content(tool_msg.content)
-        if len(content) > ENV_OUTPUT_MAX_LEN:
-            content = content[:ENV_OUTPUT_MAX_LEN] + "..."
-        _log(content, "dim green")
+        _log(f"Verdict: [bold {style}]{verdict}[/bold {style}] | {feedback}", style)
 
 _STEP_RENDERERS = {
     "planner": _render_planner,
     "formal_gate": _render_formal_gate,
-    "environment": _render_environment,
 }
 
 def print_step_update(step_data: Dict[str, Any]):

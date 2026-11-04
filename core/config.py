@@ -18,7 +18,7 @@ class UseCaseConfig:
     The use-case MCP server verifies every action with its ASM models through the
     enforcement framework, executes it and returns the decision to the Formal Gate.
     """
-    environment_mcp_command: List[str]
+    mcp_server_command: List[str]
     max_steps_per_turn: int = 3
     planner_hints: str = ""
 

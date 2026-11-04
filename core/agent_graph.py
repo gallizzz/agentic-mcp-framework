@@ -1,6 +1,6 @@
 """The graph-based orchestrator for LangGraph.
 
-LangGraph execution pipeline coordinating Planner, Formal Gate, and Environment nodes."""
+LangGraph execution pipeline coordinating the Planner and Formal Gate nodes."""
 
 from contextlib import asynccontextmanager
 import asyncio
@@ -32,7 +32,6 @@ from core.cli_formatter import (
     print_success,
 )
 from core.config import UseCaseConfig, load_use_case
-from core.environment_node import create_environment_node
 from core.formal_gate_node import FormalGateNode, SubmitCallable
 from core.mcp_utils import parse_mcp_response
 from core.planner_node import create_planner_node, create_planner_router
@@ -52,18 +51,18 @@ CHAT_CONFIG = {"configurable": {"thread_id": "chat"}}
 
 def gate_router(state: AgentState) -> str:
     """Routes after Formal Gate evaluation (replan rounds are bounded by the planner)."""
-    verdict = state.get("guard_verdict")
-    # The submit tool already executed the action: only reads reach the Environment
-    if verdict == "BYPASS":
-        return "environment"
     # BLOCKED goes back only for the final explanation (final_answer_only)
-    if verdict in ("APPROVED", "SHIELDED", "REPLAN", "BLOCKED"):
+    if state.get("guard_verdict") in ("BYPASS", "APPROVED", "SHIELDED", "REPLAN", "BLOCKED"):
         return "planner"
     return END
 
 # ============================================================================
 # GRAPH BUILDER
 # ============================================================================
+
+def _result_text(result: Any) -> str:
+    """Text of an MCP tool result."""
+    return "\n".join(getattr(c, "text", "") for c in result.content)
 
 def _read_only_tools(tools: List[BaseTool]) -> List[BaseTool]:
     """Tools allowed to skip the Formal Gate: those with the MCP `readOnlyHint` annotation."""
@@ -72,33 +71,28 @@ def _read_only_tools(tools: List[BaseTool]) -> List[BaseTool]:
 def build_formal_gate_graph(
     llm,
     use_case: UseCaseConfig,
-    environment_tools: List[BaseTool],
+    server_tools: List[BaseTool],
     submit_callable: SubmitCallable,
 ):
-    """Builds the pipeline graph: Planner (LLM) -> Formal Gate -> Environment (reads only)."""
-    read_only_tools = _read_only_tools(environment_tools)
-
+    """Builds the pipeline graph: Planner (LLM) <-> Formal Gate."""
     builder = StateGraph(AgentState)
     builder.add_node(
         "planner",
         create_planner_node(
-            llm, environment_tools,
-            max_steps=use_case.max_steps_per_turn, hints=use_case.planner_hints,
+            llm, server_tools, use_case.max_steps_per_turn, use_case.planner_hints,
         ),
     )
     builder.add_node(
         "formal_gate",
         FormalGateNode(
             submit_callable=submit_callable,
-            read_only_tools={t.name for t in read_only_tools},
+            read_only_tools=_read_only_tools(server_tools),
         ),
     )
-    builder.add_node("environment", create_environment_node(read_only_tools))
 
     builder.add_edge(START, "planner")
     builder.add_conditional_edges("planner", create_planner_router(use_case.max_steps_per_turn))
     builder.add_conditional_edges("formal_gate", gate_router)
-    builder.add_edge("environment", "planner")
 
     return builder.compile(checkpointer=InMemorySaver())
 
@@ -108,9 +102,9 @@ def build_formal_gate_graph(
 
 def _build_mcp_config(use_case: UseCaseConfig) -> Dict[str, Dict[str, Any]]:
     """Builds the stdio configuration of the use-case MCP server."""
-    env_cmd, *env_args = use_case.environment_mcp_command
+    env_cmd, *env_args = use_case.mcp_server_command
     return {
-        "environment_server": {
+        "use_case_server": {
             "command": env_cmd,
             "args": env_args,
             "transport": "stdio",
@@ -128,28 +122,27 @@ async def enforcement_session(use_case: UseCaseConfig):
     client = MultiServerMCPClient(_build_mcp_config(use_case))
     started = False
     try:
-        async with client.session("environment_server") as mcp_session:
-            environment_tools = await load_mcp_tools(mcp_session, server_name="environment_server")
-            if SUBMIT_TOOL not in {t.name for t in environment_tools}:
+        async with client.session("use_case_server") as mcp_session:
+            server_tools = await load_mcp_tools(mcp_session, server_name="use_case_server")
+            if SUBMIT_TOOL not in {t.name for t in server_tools}:
                 raise RuntimeError(f"Submit tool '{SUBMIT_TOOL}' missing from the use-case server.")
-            if STATE_TOOL not in {t.name for t in _read_only_tools(environment_tools)}:
+            if STATE_TOOL not in {t.name for t in _read_only_tools(server_tools)}:
                 raise RuntimeError(f"State tool '{STATE_TOOL}' missing or not declared read-only.")
 
             health = await mcp_session.call_tool(STATE_TOOL, {})
-            health_data, health_raw = parse_mcp_response(
-                [{"text": getattr(c, "text", "")} for c in health.content]
-            )
-            if health.isError or health_data.get("status") in ("recovery_required", "error"):
-                raise RuntimeError(f"Enforcement server not ready: {health_data.get('reason', health_raw)}")
+            health_raw = _result_text(health)
+            health_data = parse_mcp_response(health_raw)
+            # An empty or non-JSON answer is not a state: the gate must not start on it
+            if health.isError or not health_data or health_data.get("status") in ("recovery_required", "error"):
+                raise RuntimeError(f"Enforcement server not ready: {health_data.get('reason', health_raw or 'empty answer')}")
             print_success(f"Enforcement server ready ('{STATE_TOOL}' answered).")
 
             async def submit(args: Dict[str, Any]) -> tuple[bool, str]:
                 result = await mcp_session.call_tool(SUBMIT_TOOL, args)
-                text = "\n".join(getattr(c, "text", "") for c in result.content)
-                return bool(result.isError), text
+                return bool(result.isError), _result_text(result)
 
             started = True
-            yield environment_tools, submit
+            yield server_tools, submit
     except Exception as e:
         if started or isinstance(e, RuntimeError):
             raise
@@ -170,9 +163,7 @@ def _turn_input(user_input: str) -> AgentState:
     """Appends the user request to the conversation and resets every per-turn field."""
     return {
         "messages": [HumanMessage(content=user_input)],
-        "candidate_action": None,
         "guard_verdict": None,
-        "executed_action": None,
         "guard_feedback": None,
         "planner_steps": 0,
         "final_answer_only": False,
@@ -190,8 +181,8 @@ async def main():
         use_case = load_use_case(use_case_name)
         print_info(f"Use case: [bold green]{use_case_name}[/bold green]")
 
-        async with enforcement_session(use_case) as (environment_tools, submit_callable):
-            graph = build_formal_gate_graph(llm, use_case, environment_tools, submit_callable)
+        async with enforcement_session(use_case) as (server_tools, submit_callable):
+            graph = build_formal_gate_graph(llm, use_case, server_tools, submit_callable)
 
             print_ready_prompt()
             prompt = UserPrompt()

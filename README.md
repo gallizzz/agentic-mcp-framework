@@ -100,7 +100,7 @@ python use_cases/pillbox/run_scenario.py run use_cases/pillbox/scenarios/M1.json
 
 ```text
 core/                     Motore di orchestrazione generico (indipendente dal dominio)
-  agent_graph.py          Entrypoint: grafo LangGraph Planner -> Formal Gate -> Environment
+  agent_graph.py          Entrypoint: grafo LangGraph Planner <-> Formal Gate
   config.py               UseCaseConfig e caricamento del caso di studio
 enforcement/              Framework di enforcement: sessioni AsmetaS, preview, commit con ACK
   bootstrap.py            Entry point generici: server MCP ed esecutore di scenari
@@ -133,7 +133,7 @@ Credenziali, parametri di connessione e selezione del caso di studio:
 
 ### Configurazione del Caso di Studio (`use_cases/<nome>/config.py`)
 Ogni caso di studio definisce `USE_CASE = UseCaseConfig(...)` con:
-* **`environment_mcp_command`**: Comando stdio del server MCP del caso di studio.
+* **`mcp_server_command`**: Comando stdio del server MCP del caso di studio.
 * **`max_steps_per_turn`**: Numero massimo di passi del Planner per turno (default 3).
 * **`planner_hints`**: Istruzioni di dominio aggiunte al prompt del Planner.
 

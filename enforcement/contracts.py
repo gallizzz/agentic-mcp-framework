@@ -13,7 +13,13 @@ DEFAULT_URL = "http://localhost:8080"
 SUBMIT_TOOL = "submit_plan"
 SUBMIT_ARGUMENT = "submission"  # name of the Plan parameter of SUBMIT_TOOL
 STATE_TOOL = "get_system_state"
-FINAL_DECISIONS = ("ALLOW", "REPLACE", "REPLAN", "BLOCK")
+# Final decisions of the enforcer -> verdicts of the Formal Gate
+DECISION_VERDICTS = {
+    "ALLOW": "APPROVED",
+    "REPLACE": "SHIELDED",
+    "REPLAN": "REPLAN",
+    "BLOCK": "BLOCKED",
+}
 
 class AsmError(RuntimeError):
     """The service or the execution protocol did not provide valid evidence."""
