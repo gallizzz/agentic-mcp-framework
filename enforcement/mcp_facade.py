@@ -1,13 +1,13 @@
 """Thin MCP facade. No ASM steps, domain rules, or commit logic here.
 
-Started by the MCP server of a use case (e.g. use_cases/pillbox/mcp_server.py).
+Started by enforcement/bootstrap.py in the MCP server of a use case.
 Only stdio is exposed; the ASMETA HTTP service stays private.
 """
 
 import asyncio
 from typing import Any, Callable
 
-from enforcement.contracts import AsmError, Plan
+from enforcement.contracts import STATE_TOOL, SUBMIT_TOOL, AsmError, Plan
 from enforcement.gateway import EnforcementGateway
 
 
@@ -27,12 +27,13 @@ def serve(gateway: EnforcementGateway) -> None:
     mcp = FastMCP("Enforcement gateway")
     read_only = ToolAnnotations(readOnlyHint=True)
 
-    @mcp.tool(annotations=read_only)
+    @mcp.tool(name=STATE_TOOL, annotations=read_only)
     async def get_system_state() -> dict:
         """Read the current managed-system state and version without modifying it."""
         return await asyncio.to_thread(_guarded, gateway.get_system_state)
 
-    @mcp.tool()
+    # The parameter name must match contracts.SUBMIT_ARGUMENT
+    @mcp.tool(name=SUBMIT_TOOL)
     async def submit_plan(submission: Plan) -> dict:
         """Submit current action and residual plan. At most the first action is committed.
 

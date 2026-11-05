@@ -5,7 +5,7 @@ from dataclasses import asdict
 import logging
 from threading import RLock
 from .asm_runtime import ASMRuntimeAdapter
-from .contracts import AsmError, ModelBinding, Plan
+from .contracts import DECISION_VERDICTS, AsmError, ModelBinding, Plan
 from .preview_orchestrator import PreviewOrchestrator
 logger = logging.getLogger(__name__)
 
@@ -144,7 +144,7 @@ class EnforcementGateway:
 
                 if output.request_id != command_id:
                     raise AsmError("Final decision belongs to another request")
-                if output.decision not in ("ALLOW", "REPLACE", "REPLAN", "BLOCK"):
+                if output.decision not in DECISION_VERDICTS:
                     raise AsmError("Enforcer has not returned a final decision")
                 success = output.decision in ("ALLOW", "REPLACE")
                 if success != commit_applied:
@@ -176,13 +176,21 @@ class EnforcementGateway:
                     "request_id": plan.request_id, "status": "recovery_required",
                     "decision": None, "reason": str(exc), "commit_outcome": outcome,
                     "applied_action": applied_action,
-                    "last_observed_state": self.binding.summary(self.last_live),
+                    "last_observed_state": self._observed_state(),
                     "preview": asdict(preview_result) if preview_result else None,
                 }
                 logger.error("Request %s requires recovery: %s", plan.request_id, exc)
             record["status"] = result["status"]
             record["result"] = deepcopy(result)
             return result
+
+    def _observed_state(self) -> dict | None:
+        """State for a failure report: reading it must never hide the failure itself."""
+        try:
+            return self.binding.summary(self.last_live)
+        except Exception as exc:
+            logger.error("Live state not readable for the failure report: %s", exc)
+            return None
 
     def close(self) -> None:
         with self.lock:
