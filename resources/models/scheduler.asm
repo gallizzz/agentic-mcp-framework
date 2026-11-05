@@ -105,7 +105,11 @@ signature:
 	derived effectiveDoseTime: Prod(Compartment,Natural) -> Natural
 	static agentTimeDistance: Prod(Natural,Natural) -> Integer
 	derived agentTimeAdmissible: Natural -> Boolean
-	derived agentHasCorrection: Boolean
+	// Working state for a deterministic, single-pass local-repair search.
+	controlled repairScanTime: Natural
+	controlled repairBestTime: Natural
+	controlled repairBestDistance: Integer
+	controlled repairFound: Boolean
 
 	controlled state: States
 	controlled amount: String -> Natural
@@ -207,8 +211,32 @@ definitions:
 					 ($t > effectiveDoseTime($c,$j) and
 					  $t-effectiveDoseTime($c,$j) >= ntoi(minToInterferer(name($c),name(agentTargetCompartment))))))))))
 
-	function agentHasCorrection =
-		(exist $t in range(clinicalEarliestTime,clinicalLatestTime+1n) with agentTimeAdmissible($t))
+	// Search in ascending time order. Equal distances keep the earlier time.
+	// All iterations occur within the current ASM step (seq/while).
+	rule r_FindClosestCorrection =
+		seq
+			par
+				repairScanTime := clinicalEarliestTime
+				repairBestTime := 0n
+				repairBestDistance := 0
+				repairFound := false
+			endpar
+			while repairScanTime <= clinicalLatestTime do
+				seq
+					if agentTimeAdmissible(repairScanTime) then
+						let ($distance = agentTimeDistance(repairScanTime,agentRequestedTime)) in
+							if not repairFound or $distance < repairBestDistance then
+								par
+									repairBestTime := repairScanTime
+									repairBestDistance := $distance
+									repairFound := true
+								endpar
+							endif
+						endlet
+					endif
+					repairScanTime := repairScanTime + 1n
+				endseq
+		endseq
 
 	rule r_rescheduler = 
 	  forall $compartment in Compartment do 
@@ -366,39 +394,35 @@ endif
 								previewRequested := false
 							endpar
 						else
-							if agentHasCorrection then
-								// Deterministic closest-time policy (earlier time breaks ties).
-								choose $t in range(clinicalEarliestTime,clinicalLatestTime+1n) with
-									(agentTimeAdmissible($t) and
-									 (forall $u in range(clinicalEarliestTime,clinicalLatestTime+1n) with
-										(agentTimeAdmissible($u) implies
-										 (agentTimeDistance($t,agentRequestedTime) < agentTimeDistance($u,agentRequestedTime) or
-										  (agentTimeDistance($t,agentRequestedTime) = agentTimeDistance($u,agentRequestedTime) and $t <= $u))))) do
+							seq
+								r_FindClosestCorrection[]
+								if repairFound then
 									par
 										r_ClearAllNewTimeCommands[]
 										pendingRequestId := agentRequestId
 										pendingCompartment := agentTargetCompartment
 										pendingDoseIndex := agentTargetDoseIndex
-										pendingCorrectedTime := $t
+										pendingCorrectedTime := repairBestTime
 										pendingScheduleVersion := scheduleVersion
 										previewRequestId := agentRequestId
 										previewBaseScheduleVersion := scheduleVersion
 										previewTargetCompartment := agentTargetCompartment
 										previewTargetDoseIndex := agentTargetDoseIndex
-										previewCandidateTime := $t
+										previewCandidateTime := repairBestTime
 										previewRequested := true
 										agentPhase := AP_WAIT_PREVIEW
 										agentDecision := NO_DECISION
 										agentReason := NO_REASON
 									endpar
-							else
-								par
-									r_ClearAllNewTimeCommands[]
-									agentDecision := REPLAN
-									agentReason := NO_LOCAL_REPAIR
-									previewRequested := false
-								endpar
-							endif
+								else
+									par
+										r_ClearAllNewTimeCommands[]
+										agentDecision := REPLAN
+										agentReason := NO_LOCAL_REPAIR
+										previewRequested := false
+									endpar
+								endif
+							endseq
 						endif
 					endif
 				endif
@@ -624,7 +648,12 @@ invariant inv_A_actual_time over Compartment: (forall $compartment in Compartmen
  * 		else 
  * 			r_NORMAL_FUNCT[]
  endif */
-default init s0:	//This init state is correct, it does not generate any invariant violation
+default init s0:
+	function repairScanTime = 0n
+	function repairBestTime = 0n
+	function repairBestDistance = 0
+	function repairFound = false
+	//This init state is correct, it does not generate any invariant violation
 	//Controlled function that indicates the status of the system
 		function state = INIT
 		// NEW: initialize agentic enforcement protocol
