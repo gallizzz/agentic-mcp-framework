@@ -54,6 +54,24 @@ PREVIEW_FEEDBACK = (
 )
 
 
+REASON_GLOSSARY = {
+    "NO_REASON": "No problem. With REPLACE, the requested time was not allowed and was replaced with the one applied.",
+    "STALE_STATE": "The version sent is not the current one, or the state changed during verification. "
+                   "Reread the state and try again.",
+    "NO_LOCAL_REPAIR": "No allowed time satisfies both the request and the `goals` sent (availability and deadline).",
+    "PREVIEW_CONFLICT_REASON": "The correction would be allowed, but the rest of the plan would lead to a conflict "
+                               "between doses. The complete plan cannot be carried out: do NOT resend only part of it "
+                               "(for example by dropping the remaining actions) to get the first action applied. "
+                               "Propose a complete alternative plan to the user or ask them how to proceed.",
+    "PREVIEW_UNAVAILABLE": "The simulation of the plan gave no conclusive outcome.",
+    "INVALID_WINDOW": "The constraints given are inconsistent (e.g. availability after the deadline).",
+    "INVALID_TARGET": "The dose indicated does not exist or has already passed.",
+    "COMMIT_REJECTED": "The pillbox rejected the command.",
+    "COMMIT_TIMEOUT": "The pillbox did not confirm the command in time.",
+    "REACTIVE_PRIORITY": "A pillbox event (dose missed or taken late) takes precedence. Try again later.",
+}
+
+
 def hhmm(minutes: int) -> str:
     return f"{minutes // 60:02d}:{minutes % 60:02d}"
 
@@ -79,6 +97,24 @@ class PillboxBinding:
         self.compartments = self.config["compartments"]
         if self.compartments != ["compartment1", "compartment2"]:
             raise ValueError("The included ASM bundle defines exactly two compartments")
+
+    def plan_description(self) -> str:
+        return (
+            "Allowed actions in `actions`: only `{\"kind\": \"reschedule\", \"parameters\": "
+            "{\"compartment\": ..., \"dose_index\": ..., \"time\": ...}}`, which moves a dose of a compartment "
+            "to a new time. `compartment` is one of "
+            + ", ".join(f"`{c}`" for c in self.compartments) + "; `dose_index` starts at 0; "
+            "`time` is in minutes from midnight (0-1439).\n"
+            "`goals` (optional) is a JSON object, never a string: `{\"available_from\": ..., \"latest_time\": ...}`, i.e. from when the patient is "
+            "available and by when they must take the dose. They apply ONLY to the first action of the list. "
+            "They are the two times stated by the user, distinct from the time requested for the dose (`time`): do not copy it here. "
+            "Example: \"move it to 10:00, I'm available from 9 and must take it by 11\" becomes `time` 600, "
+            "`available_from` 540, `latest_time` 660. If the user does not say from when they are available or by when "
+            "they must take the dose, omit `goals`: do not derive them from the state or from the requested times."
+        )
+
+    def reason_glossary(self) -> dict[str, str]:
+        return REASON_GLOSSARY
 
     def validate_plan(self, plan: Plan) -> None:
         # Representation checks, not checks of temporal safety or goal feasibility.
@@ -111,8 +147,11 @@ class PillboxBinding:
 
     def summary(self, state: AsmState) -> dict:
         schedule = {c: state.sequence(f"time_consumption({c})") for c in self.compartments}
+        # The device model defines which medication each compartment holds
+        medication = {c: state.literal(f"name({c})").strip('"') for c in self.compartments}
         return {
             "version": self.version(state),
+            "medication": medication,
             "schedule": schedule,
             "schedule_hhmm": {c: [hhmm(t) for t in times] for c, times in schedule.items()},
             "last_applied_command": {c: state.integer(f"lastAppliedCommandId({c})") for c in self.compartments},

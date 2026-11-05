@@ -17,17 +17,17 @@ from enforcement.contracts import DECISION_VERDICTS, SUBMIT_ARGUMENT, SUBMIT_TOO
 # Async callable (tool args) -> (is_error, raw text result) bound to the MCP session
 SubmitCallable = Callable[[Dict[str, Any]], Awaitable[Tuple[bool, str]]]
 
-APPROVED_NOTICE = "[FORMAL GATE: APPROVED] Azione verificata ed eseguita esattamente come proposta."
-REPLAN_NOTICE = "[FORMAL GATE: REPLAN] Nessuna modifica è stata applicata."
-BLOCKED_NOTICE = "[FORMAL GATE: BLOCKED] Azione bloccata dall'enforcer formale."
+APPROVED_NOTICE = "[FORMAL GATE: APPROVED] Action verified and executed exactly as proposed."
+REPLAN_NOTICE = "[FORMAL GATE: REPLAN] No change was applied."
+BLOCKED_NOTICE = "[FORMAL GATE: BLOCKED] Action blocked by the formal enforcer."
 
 # What an operational failure did to the live system (the turn ends right after it)
 COMMIT_OUTCOME_NOTICES = {
-    "applied": "il comando È STATO APPLICATO al sistema",
-    "not_applied": "il comando NON è stato applicato",
-    "unknown": "NON È NOTO se il comando sia stato applicato",
+    "applied": "the command WAS APPLIED to the system",
+    "not_applied": "the command was NOT applied",
+    "unknown": "it is UNKNOWN whether the command was applied",
 }
-RECOVERY_NOTICE = "Le modifiche sono disabilitate finché l'agente non viene riavviato."
+RECOVERY_NOTICE = "Changes are disabled until the agent is restarted."
 
 # ============================================================================
 # HELPER FUNCTIONS
@@ -65,9 +65,9 @@ def _failure_feedback(result: Dict[str, Any], raw: str) -> str:
     parts = [f"Enforcement server error ({status}): {result.get('reason', raw)}."]
     outcome = COMMIT_OUTCOME_NOTICES.get(result.get("commit_outcome"))
     if outcome:
-        parts.append(f"Esito: {outcome}.")
+        parts.append(f"Outcome: {outcome}.")
     if result.get("applied_action"):
-        parts.append(f"Azione applicata: {result['applied_action']}.")
+        parts.append(f"Applied action: {result['applied_action']}.")
     if status == "recovery_required":
         parts.append(RECOVERY_NOTICE)
     return " ".join(parts)
@@ -81,15 +81,15 @@ def _shielding_notice(
     """Tells the Planner that the enforcer replaced the proposed action."""
     return (
         f"[FORMAL GATE INTERVENTION - SHIELDING APPLIED]\n"
-        f"Azione originariamente proposta dal Planner: {submitted.get('args')}\n"
-        f"Azione schermata/eseguita per sicurezza: {applied_action}\n"
-        f"Motivazione del Formal Gate: {feedback}\n"
-        f"Esito esecuzione nell'ambiente: {execution_result}\n\n"
-        f"ISTRUZIONE PER LA RISPOSTA FINALE: Spiega all'utente in modo trasparente che l'azione richiesta "
-        f"NON è stata eseguita come desiderato, ma è stata sostituita dal Formal Gate con l'azione schermata "
-        f"indicata sopra, per la seguente ragione: {feedback}. "
-        f"Descrivi l'azione con i termini dell'utente, senza riportare questi dati grezzi. "
-        f"Non affermare in nessun caso che l'azione originariamente richiesta ha avuto successo."
+        f"Action originally proposed by the Planner: {submitted.get('args')}\n"
+        f"Shielded action executed for safety: {applied_action}\n"
+        f"Formal Gate reason: {feedback}\n"
+        f"Execution outcome in the environment: {execution_result}\n\n"
+        f"INSTRUCTION FOR THE FINAL ANSWER: Explain transparently to the user that the requested action "
+        f"was NOT executed as desired, but was replaced by the Formal Gate with the shielded action "
+        f"shown above, for the following reason: {feedback}. "
+        f"Describe the action in the user's terms, without repeating this raw data. "
+        f"Never claim that the originally requested action succeeded."
     )
 
 def _remaining_actions_notice(submitted: Dict[str, Any]) -> str:
@@ -100,10 +100,10 @@ def _remaining_actions_notice(submitted: Dict[str, Any]) -> str:
     if not remaining:
         return ""
     return (
-        f"\n\nAZIONI DEL PIANO ANCORA DA ESEGUIRE IN QUESTO TURNO: {remaining}\n"
-        "ISTRUZIONE: non rispondere ancora all'utente. Rileggi lo stato e invia un nuovo piano con "
-        "queste azioni. Spiega gli esiti all'utente solo quando il piano è completato o non può proseguire. "
-        "Nei turni successivi questo elenco non vale più: non riprendere queste azioni se l'utente non lo chiede."
+        f"\n\nPLAN ACTIONS STILL TO EXECUTE IN THIS TURN: {remaining}\n"
+        "INSTRUCTION: do not answer the user yet. Reread the state and submit a new plan with "
+        "these actions. Explain the outcomes to the user only when the plan is complete or cannot continue. "
+        "In later turns this list no longer applies: do not resume these actions unless the user asks."
     )
 
 def _skip_extra_tool_calls(last_msg: Any) -> list:
@@ -232,9 +232,9 @@ class FormalGateNode:
         elif verdict == "APPROVED":
             content = f"{APPROVED_NOTICE}\n{result_text}{_remaining_actions_notice(submitted)}"
         elif verdict == "REPLAN":
-            content = f"{REPLAN_NOTICE} Motivo: {feedback}\n{result_text}"
+            content = f"{REPLAN_NOTICE} Reason: {feedback}\n{result_text}"
         else:
-            content = f"{BLOCKED_NOTICE} Motivo: {feedback}\n{result_text}"
+            content = f"{BLOCKED_NOTICE} Reason: {feedback}\n{result_text}"
 
         return _gate_result(
             verdict, shown_feedback,

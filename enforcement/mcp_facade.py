@@ -11,6 +11,21 @@ from enforcement.contracts import STATE_TOOL, SUBMIT_TOOL, AsmError, Plan
 from enforcement.gateway import EnforcementGateway
 
 
+SUBMIT_DESCRIPTION = (
+    "Modify the system by submitting the current action and any later actions of the plan. "
+    "Only the server's ASM models authorize changes; raw ASM inputs are not accepted.\n"
+    "`submission` contains ONLY these fields, with no others:\n"
+    "- `request_id`: any string, it is replaced automatically;\n"
+    "- `expected_version`: the `version` you have just read with `get_system_state`;\n"
+    "- `actions`: the ordered list of actions;\n"
+    "- `goals` (optional): the constraints the user gave for the first action.\n"
+    "At most the FIRST action is applied, possibly corrected by the enforcer; the others only serve to "
+    "verify the plan. For later actions, reread the state and send a new `submit_plan` with the new "
+    "version, the list of remaining actions and, in `goals`, only the constraints the user gave for that "
+    "action (if they gave none, omit `goals`)."
+)
+
+
 def _guarded(call: Callable[..., dict], *args: Any) -> dict:
     try:
         return call(*args)
@@ -32,14 +47,11 @@ def serve(gateway: EnforcementGateway) -> None:
         """Read the current managed-system state and version without modifying it."""
         return await asyncio.to_thread(_guarded, gateway.get_system_state)
 
-    # The parameter name must match contracts.SUBMIT_ARGUMENT
-    @mcp.tool(name=SUBMIT_TOOL)
-    async def submit_plan(submission: Plan) -> dict:
-        """Submit current action and residual plan. At most the first action is committed.
+    description = SUBMIT_DESCRIPTION + "\n" + gateway.binding.plan_description().strip()
 
-        Later actions must be resubmitted with a new request_id and current version.
-        Only the server's ASM models authorize changes. No raw ASM inputs accepted.
-        """
+    # The parameter name must match contracts.SUBMIT_ARGUMENT
+    @mcp.tool(name=SUBMIT_TOOL, description=description)
+    async def submit_plan(submission: Plan) -> dict:
         return await asyncio.to_thread(_guarded, gateway.submit_plan, submission)
 
     @mcp.tool(annotations=read_only)

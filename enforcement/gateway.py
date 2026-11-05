@@ -155,6 +155,7 @@ class EnforcementGateway:
                 result = {
                     "request_id": plan.request_id, "status": "completed",
                     "decision": output.decision, "reason": output.reason,
+                    **self._reason_explanation(output.reason),
                     "applied_action": applied_action,
                     "acknowledged_command_id": command_id if commit_applied else None,
                     "committed_actions": 1 if commit_applied else 0,
@@ -183,6 +184,10 @@ class EnforcementGateway:
             record["status"] = result["status"]
             record["result"] = deepcopy(result)
             return result
+
+    def _reason_explanation(self, reason: str) -> dict:
+        explanation = self.binding.reason_glossary().get(reason)
+        return {"reason_explanation": explanation} if explanation else {}
 
     def _observed_state(self) -> dict | None:
         """State for a failure report: reading it must never hide the failure itself."""

@@ -98,7 +98,7 @@ flowchart TD
   - `deploy.py`: carica sul web service i modelli elencati nella configurazione del caso di studio;
   - `mcp_facade.py`: tool MCP generici `get_system_state` e `get_plan_status` (sola lettura) e `submit_plan`;
   - `bootstrap.py`: entry point generici del caso di studio, `run_mcp_server` e `run_scenario_cli`.
-* **Confine con il dominio:** il protocollo `ModelBinding`, implementato in `use_cases/<nome>/binding.py`, traduce richieste, comandi e osservazioni da/verso gli I/O ASM.
+* **Confine con il dominio:** il protocollo `ModelBinding`, implementato in `use_cases/<nome>/binding.py`, traduce richieste, comandi e osservazioni da/verso gli I/O ASM. Con `plan_description()` descrive anche al Planner i tipi di azione, i loro parametri e il significato di `goals`: il facade lo aggiunge alla descrizione di `submit_plan`, mentre i campi comuni del piano (`request_id`, `expected_version`, `actions`) li descrive il facade stesso. Con `reason_glossary()` fornisce il significato dei codici di motivo dell'enforcer: il gateway aggiunge al risultato il campo `reason_explanation` e il Planner lo usa per spiegare l'esito.
 
 ```mermaid
 flowchart LR

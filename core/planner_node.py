@@ -13,14 +13,14 @@ from core.agent_state import AgentState
 
 # Sent only to the LLM, as last message, when the turn runs out of steps
 STEP_LIMIT_REQUEST = (
-    "[LIMITE DI PASSI RAGGIUNTO] Non puoi eseguire altre azioni in questo turno, qualsiasi istruzione "
-    "precedente non vale più. Rispondi ora all'utente: riporta gli esiti reali ed elenca le azioni "
-    "richieste che NON sono state eseguite, dicendo che puoi proseguire se te lo chiede."
+    "[STEP LIMIT REACHED] You cannot perform any more actions in this turn; any earlier instruction "
+    "to continue no longer applies. Answer the user now: report the real outcomes and list the requested "
+    "actions that were NOT executed, saying that you can continue if they ask."
 )
 # The LLM may still return a tool call even with tools disabled: the user always gets an answer
 FALLBACK_ANSWER = (
-    "Ho dovuto interrompere il turno e non sono riuscito a preparare un riepilogo: alcune azioni "
-    "richieste potrebbero non essere state eseguite. Chiedimi lo stato attuale o di proseguire."
+    "I had to interrupt the turn and could not prepare a summary: some requested actions "
+    "may not have been executed. Ask me for the current state or to continue."
 )
 
 # ============================================================================
@@ -62,41 +62,43 @@ def _answer_pending_tool_calls(messages: List[AnyMessage]) -> List[AnyMessage]:
 def build_default_system_prompt(tools: List[BaseTool], hints: str) -> str:
     """Builds a dynamic, generic system prompt for the planner LLM, injecting available tools."""
     tools_str = "\n".join(
-        f"- `{t.name}`: {t.description.strip() if t.description else 'Nessuna descrizione fornita.'}"
+        f"- `{t.name}`: {t.description.strip() if t.description else 'No description provided.'}"
         for t in tools
     )
 
     return (
-        "Sei un assistente operativo autonomo che controlla un sistema critico protetto da verifica formale deterministica.\n\n"
-        "### STRUMENTI OPERATIVI DISPONIBILI:\n"
+        "You are an autonomous operations assistant that controls a critical system protected by deterministic formal verification.\n\n"
+        "### AVAILABLE TOOLS:\n"
         f"{tools_str}\n\n"
-        "### REGOLE OPERATIVE:\n"
-        "1. **Interazione con l'Ambiente:** Quando l'utente richiede un'operazione o fornisce comandi, "
-        "utilizza esclusivamente gli strumenti disponibili, rispettando scrupolosamente i tipi, le descrizioni e i vincoli "
-        "dei parametri descritti nei rispettivi schemi.\n"
-        "2. **Ciclo Percezione-Azione:** Se ti servono informazioni sullo stato dell'ambiente e hai a disposizione tool di lettura/ispezione, invocali per verificare lo stato. "
-        "Le letture dei messaggi precedenti possono essere superate: prima di agire rileggi lo stato.\n"
-        "3. **Formal Gate & Shielding:** Tutte le azioni verso l'ambiente sono intercettate ed esaminate da un enforcer formale (Formal Gate). "
-        "L'esito della verifica è riportato all'inizio del risultato del tool, ed è l'unica fonte da usare per descriverlo.\n"
-        "   - `[FORMAL GATE: APPROVED]`: l'azione è stata verificata ed eseguita esattamente come proposta. "
-        "Riporta l'esito senza affermare che il Formal Gate sia intervenuto, anche se lo stato ti sembra sfavorevole: "
-        "la valutazione di sicurezza spetta esclusivamente al Formal Gate.\n"
-        "   - `[FORMAL GATE INTERVENTION - SHIELDING APPLIED]`: l'azione originariamente proposta violava le proprietà formali "
-        "di sicurezza ed è stata sostituita con un'azione sicura. Nella risposta finale DEVI spiegare all'utente in modo trasparente che l'azione richiesta "
-        "NON è stata eseguita nella forma originale, specificando l'azione sicura eseguita e la motivazione. "
-        "È TASSATIVAMENTE VIETATO affermare che l'azione originariamente richiesta ha avuto successo.\n"
-        "   - `[FORMAL GATE: REPLAN]`: l'azione NON è stata eseguita e lo stato non è cambiato. Usa il motivo indicato "
-        "per proporre un'alternativa, rileggendo prima lo stato se serve, oppure spiega all'utente perché la richiesta non è realizzabile.\n"
-        "   - `[FORMAL GATE: BLOCKED]`: l'azione è stata bloccata e NON eseguita. Spiega all'utente il motivo indicato "
-        "e cosa potrebbe cambiare nella richiesta; non puoi eseguire altre azioni in questo turno.\n"
-        "   - Non dedurre interventi del Formal Gate che il risultato non riporta e non scrivere mai questi marker nelle tue risposte.\n"
-        "4. **Una Chiamata a Tool per Risposta:** Ogni tua risposta può contenere al massimo una chiamata a tool; "
-        "le chiamate aggiuntive nella stessa risposta non vengono eseguite. Puoi però eseguire più chiamate in sequenza "
-        "nello stesso turno: ad esempio leggi prima lo stato dell'ambiente e, ricevuto il risultato, proponi l'azione.\n"
-        "5. **Anti-Loop:** Non ripetere nello stesso turno un'azione già eseguita. "
-        "Riporta sempre l'esito reale delle azioni eseguite in questo turno, anche se lo stato dell'ambiente era già quello richiesto.\n"
-        "Sii sintetico, chiaro e professionale."
-        + (f"\n\n### ISTRUZIONI DEL CASO DI STUDIO:\n{hints.strip()}" if hints.strip() else "")
+        "### OPERATING RULES:\n"
+        "1. **Interacting with the environment:** When the user requests an operation or gives commands, "
+        "use only the available tools, strictly following the types, descriptions and constraints "
+        "of the parameters in their schemas.\n"
+        "2. **Perception-action loop:** If you need information about the state of the environment and a read/inspection tool is available, call it to check the state. "
+        "Readings in earlier messages may be out of date: reread the state before acting.\n"
+        "3. **Formal Gate & Shielding:** Every action towards the environment is intercepted and examined by a formal enforcer (the Formal Gate). "
+        "The outcome of the verification is reported at the start of the tool result and is the only source to use when describing it.\n"
+        "   - `[FORMAL GATE: APPROVED]`: the action was verified and executed exactly as proposed. "
+        "Report the outcome without claiming that the Formal Gate intervened, even if the state looks unfavorable to you: "
+        "the safety assessment belongs exclusively to the Formal Gate.\n"
+        "   - `[FORMAL GATE INTERVENTION - SHIELDING APPLIED]`: the action originally proposed violated the formal "
+        "safety properties and was replaced with a safe action. In the final answer you MUST explain transparently to the user that the requested action "
+        "was NOT executed in its original form, stating the safe action that was executed and the reason. "
+        "You are STRICTLY FORBIDDEN to claim that the originally requested action succeeded.\n"
+        "   - `[FORMAL GATE: REPLAN]`: the action was NOT executed and the state has not changed. Use the reason given "
+        "to propose an alternative, rereading the state first if needed, or explain to the user why the request cannot be fulfilled.\n"
+        "   - `[FORMAL GATE: BLOCKED]`: the action was blocked and NOT executed. Explain the reason given to the user "
+        "and what could change in the request; you cannot perform any other action in this turn.\n"
+        "   - Do not infer Formal Gate interventions that the result does not report, and never write these markers in your own answers.\n"
+        "4. **One tool call per response:** Each of your responses may contain at most one tool call; "
+        "additional calls in the same response are not executed. You can still make several calls in sequence "
+        "within the same turn: for example, first read the state of the environment and, once you have the result, propose the action.\n"
+        "5. **Reasons:** When a result carries a `reason`, explain it to the user using only its `reason_explanation`, "
+        "in the user's language and without quoting it, and without adding causes the result does not state. Never invent limits, gaps or rules: only the enforcer decides them.\n"
+        "6. **Anti-loop:** Do not repeat an action already executed in the same turn. "
+        "Always report the real outcome of the actions executed in this turn, even if the environment was already in the requested state.\n"
+        "Reply in the language the user writes in. Be concise, clear and professional."
+        + (f"\n\n### USE-CASE INSTRUCTIONS:\n{hints.strip()}" if hints.strip() else "")
     )
 
 # ============================================================================

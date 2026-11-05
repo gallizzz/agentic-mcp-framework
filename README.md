@@ -139,7 +139,7 @@ Ogni caso di studio definisce `USE_CASE = UseCaseConfig(...)` con:
 
 ### Aggiungere un Nuovo Caso di Studio
 1. Aggiungi i modelli ASM in `resources/models/`.
-2. Crea `use_cases/<nome>/binding.py` con l'implementazione del `ModelBinding` (`enforcement/contracts.py`).
+2. Crea `use_cases/<nome>/binding.py` con l'implementazione del `ModelBinding` (`enforcement/contracts.py`). `plan_description()` descrive le azioni ammesse e i `goals` al Planner, che non va istruito su questo nei `planner_hints`. `reason_glossary()` spiega i codici di motivo dell'enforcer, che tornano nel risultato come `reason_explanation`.
 3. Crea la configurazione di enforcement (es. `enforcement.json`), con i modelli da caricare nella sezione `asmeta` e i parametri fidati.
 4. Crea `use_cases/<nome>/mcp_server.py`, che chiama `enforcement.bootstrap.run_mcp_server` con il binding e la configurazione. Facoltativamente crea `run_scenario.py` con `run_scenario_cli`.
 5. Crea `use_cases/<nome>/config.py` con `USE_CASE = UseCaseConfig(...)`.
