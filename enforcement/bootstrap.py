@@ -24,7 +24,7 @@ from typing import Callable
 from dotenv import load_dotenv
 
 from .asm_runtime import ASMRuntimeAdapter
-from .contracts import DEFAULT_URL, ModelBinding
+from .contracts import ModelBinding
 from .deploy import deploy
 from .gateway import EnforcementGateway
 from .mcp_facade import serve
@@ -78,7 +78,10 @@ def _base_parser(description: str, default_config: Path) -> argparse.ArgumentPar
 
 def _client() -> AsmetaRestClient:
     """REST client for the URL in ASMETAS_URL (passed by the agent, see `_build_mcp_config`)."""
-    return AsmetaRestClient(os.getenv("ASMETAS_URL", DEFAULT_URL))
+    url = os.getenv("ASMETAS_URL")
+    if not url:
+        raise RuntimeError("ASMETAS_URL is not set (see .env.example).")
+    return AsmetaRestClient(url)
 
 
 def run_mcp_server(make_binding: BindingFactory, default_config: Path) -> int:
@@ -92,8 +95,9 @@ def run_mcp_server(make_binding: BindingFactory, default_config: Path) -> int:
     # with its chat, so only warnings and errors are shown here.
     logging.basicConfig(level=logging.WARNING, format="%(name)s: %(message)s", stream=sys.stderr)
 
-    client = _client()
+    client = None
     try:
+        client = _client()  # fails here if ASMETAS_URL is not set
         with _running_gateway(client, make_binding, args.config) as gateway:
             serve(gateway)
         return 0
@@ -101,7 +105,8 @@ def run_mcp_server(make_binding: BindingFactory, default_config: Path) -> int:
         logging.error("%s", exc)
         return 1
     finally:
-        client.close()
+        if client is not None:
+            client.close()
 
 
 def run_scenario_cli(make_binding: BindingFactory, default_config: Path) -> int:
@@ -117,8 +122,9 @@ def run_scenario_cli(make_binding: BindingFactory, default_config: Path) -> int:
     logging.basicConfig(level=logging.INFO, format="%(name)s: %(message)s")
     logging.getLogger("httpx").setLevel(logging.WARNING)
 
-    client = _client()
+    client = None
     try:
+        client = _client()  # fails here if ASMETAS_URL is not set
         if args.command == "deploy":
             uploaded = _deploy_models(client, args.config, require_idle=True)
             print(f"Models uploaded: {', '.join(uploaded)}. No active simulation was modified.")
@@ -136,4 +142,5 @@ def run_scenario_cli(make_binding: BindingFactory, default_config: Path) -> int:
         logging.error("%s", exc)
         return 1
     finally:
-        client.close()
+        if client is not None:
+            client.close()

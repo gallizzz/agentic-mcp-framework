@@ -17,9 +17,6 @@ import re
 from typing import Any, Protocol
 from pydantic import BaseModel, ConfigDict, Field
 
-# Used when ASMETAS_URL is not set
-DEFAULT_URL = "http://localhost:8080"
-
 # ============================================================================
 # CONTRACT WITH THE AGENT'S FORMAL GATE (core/ imports only this file)
 # ============================================================================

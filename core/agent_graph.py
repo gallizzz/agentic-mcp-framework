@@ -47,8 +47,8 @@ from core.cli_formatter import (
 from core.config import UseCaseConfig, load_use_case
 from core.formal_gate_node import FormalGateNode, SubmitCallable, parse_mcp_response
 from core.planner_node import create_planner_node, create_planner_router
-from enforcement.contracts import DEFAULT_URL, STATE_TOOL, SUBMIT_TOOL
-load_dotenv()  # reads .env (GOOGLE_API_KEY, USE_CASE, ASMETAS_URL, ...)
+from enforcement.contracts import STATE_TOOL, SUBMIT_TOOL
+load_dotenv()  # reads .env (GEMINI_API_KEY, GEMINI_MODEL, USE_CASE, ASMETAS_URL)
 os.environ["TZ"] = "Europe/Rome"
 if hasattr(time, "tzset"):
     time.tzset()
@@ -127,12 +127,16 @@ def _build_mcp_config(use_case: UseCaseConfig) -> Dict[str, Dict[str, Any]]:
     listed in `env` here: a variable set in the agent's .env does NOT reach it unless added
     to this dict (as done for ASMETAS_URL). Add use-case variables here if a server needs them."""
     env_cmd, *env_args = use_case.mcp_server_command
+    # ASMETAS_URL (from .env) is the only source of the AsmetaS address
+    asmeta_url = os.getenv("ASMETAS_URL")
+    if not asmeta_url:
+        raise RuntimeError("ASMETAS_URL is not set (see .env.example).")
     return {
         "use_case_server": {
             "command": env_cmd,
             "args": env_args,
             "transport": "stdio",
-            "env": {"ASMETAS_URL": os.getenv("ASMETAS_URL", DEFAULT_URL)},
+            "env": {"ASMETAS_URL": asmeta_url},
         },
     }
 
@@ -202,11 +206,14 @@ async def main():
     BEFORE the `You:` prompt appears."""
     print_banner()
 
-    model_name = os.getenv("GEMINI_MODEL", "gemini-flash-lite-latest")
-    print_info(f"Initializing LLM: [bold green]{model_name}[/bold green]")
-    llm = ChatGoogleGenerativeAI(model=model_name, temperature=0.0)
-
     try:
+        # GEMINI_MODEL (from .env) is required: there is no default model
+        model_name = os.getenv("GEMINI_MODEL")
+        if not model_name:
+            raise RuntimeError("GEMINI_MODEL is not set (see .env.example).")
+        print_info(f"Initializing LLM: [bold green]{model_name}[/bold green]")
+        llm = ChatGoogleGenerativeAI(model=model_name)
+
         use_case_name = os.getenv("USE_CASE")
         use_case = load_use_case(use_case_name)
         print_info(f"Use case: [bold green]{use_case_name}[/bold green]")
