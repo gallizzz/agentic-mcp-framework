@@ -5,15 +5,20 @@ LangGraph planner node for LLM reasoning and candidate action proposal.
 The planner is the only component that talks to the LLM. It never executes tools: it only
 emits tool calls, which the router sends to the Formal Gate. When the turn must end (step
 limit reached, or the gate returned BLOCK) the LLM is called with tools disabled so it can
-only write the final answer. The system prompt is generic; domain text comes from `hints`.
+only write the final answer. The system prompt is generic (core/planner_prompt.md); domain text comes from `hints`.
 """
 
 from __future__ import annotations
+from pathlib import Path
 from typing import Any, Dict, List
 from langchain_core.messages import AIMessage, AnyMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_core.tools import BaseTool
 from langgraph.graph import END
 from core.agent_state import AgentState
+
+# Generic system prompt; the use case's hints are appended to it. The tools are not listed
+# here: the LLM receives their schemas through `bind_tools`
+SYSTEM_PROMPT_FILE = Path(__file__).resolve().parent / "planner_prompt.md"
 
 # Sent only to the LLM, as last message, when the turn runs out of steps
 STEP_LIMIT_REQUEST = (
@@ -64,51 +69,6 @@ def _answer_pending_tool_calls(messages: List[AnyMessage]) -> List[AnyMessage]:
                 ))
     return result
 
-def build_default_system_prompt(tools: List[BaseTool], hints: str) -> str:
-    """Builds a dynamic, generic system prompt for the planner LLM, injecting available tools."""
-    tools_str = "\n".join(
-        f"- `{t.name}`: {t.description.strip() if t.description else 'No description provided.'}"
-        for t in tools
-    )
-
-    return (
-        "You are an autonomous operations assistant that controls a critical system protected by deterministic formal verification.\n\n"
-        "### AVAILABLE TOOLS:\n"
-        f"{tools_str}\n\n"
-        "### OPERATING RULES:\n"
-        "1. **Interacting with the environment:** When the user requests an operation or gives commands, "
-        "use only the available tools, strictly following the types, descriptions and constraints "
-        "of the parameters in their schemas.\n"
-        "2. **Perception-action loop:** If you need information about the state of the environment and a read/inspection tool is available, call it to check the state. "
-        "Readings in earlier messages may be out of date: reread the state before acting.\n"
-        "3. **Formal Gate & Shielding:** Every action towards the environment is intercepted and examined by a formal enforcer (the Formal Gate). "
-        "The outcome of the verification is reported at the start of the tool result and is the only source to use when describing it.\n"
-        "   - `[FORMAL GATE: ALLOW]`: the action was verified and executed exactly as proposed. "
-        "Report the outcome without claiming that the Formal Gate intervened, even if the state looks unfavorable to you: "
-        "the safety assessment belongs exclusively to the Formal Gate.\n"
-        "   - `[FORMAL GATE: REPLACE - SHIELDING APPLIED]`: the action originally proposed violated the formal "
-        "safety properties and was replaced with a safe action. In the final answer you MUST explain transparently to the user that the requested action "
-        "was NOT executed in its original form, stating the safe action that was executed and the reason. "
-        "You are STRICTLY FORBIDDEN to claim that the originally requested action succeeded.\n"
-        "   - `[FORMAL GATE: REPLAN]`: the action was NOT executed and the state has not changed. Use the reason given "
-        "to propose an alternative, rereading the state first if needed, or explain to the user why the request cannot be fulfilled.\n"
-        "   - `[FORMAL GATE: BLOCK]`: the action was blocked and NOT executed. Explain the reason given to the user "
-        "and what could change in the request; you cannot perform any other action in this turn.\n"
-        "   - Do not infer Formal Gate interventions that the result does not report, and never write these markers in your own answers.\n"
-        "4. **One tool call per response:** Each of your responses may contain at most one tool call; "
-        "additional calls in the same response are not executed. You can still make several calls in sequence "
-        "within the same turn: for example, first read the state of the environment and, once you have the result, propose the action. "
-        "The limit applies to tool calls, not to actions: a single `submit_plan` call must contain ALL the actions "
-        "the user requested, in order, even though only the first one is applied by that call. "
-        "Never drop later actions and never ask the user again for data they already gave.\n"
-        "5. **Reasons:** When a result carries a `reason`, explain it to the user using only its `reason_explanation`, "
-        "in the user's language and without quoting it, and without adding causes the result does not state. Never invent limits, gaps or rules: only the enforcer decides them.\n"
-        "6. **Anti-loop:** Do not repeat an action already executed in the same turn. "
-        "Always report the real outcome of the actions executed in this turn, even if the environment was already in the requested state.\n"
-        "Reply in the language the user writes in. Be concise, clear and professional."
-        + (f"\n\n### USE-CASE INSTRUCTIONS:\n{hints.strip()}" if hints.strip() else "")
-    )
-
 # ============================================================================
 # PLANNER NODE CLASS
 # ============================================================================
@@ -118,8 +78,9 @@ class PlannerNode:
 
     def __init__(self, llm: Any, tools: List[BaseTool], max_steps: int, hints: str):
         self.max_steps = max_steps
-        # Generic prompt + the tool list discovered via MCP + the use case's hints
-        self.system_prompt = build_default_system_prompt(tools, hints)
+        # Generic prompt + the use case's hints (a missing file stops startup)
+        base = SYSTEM_PROMPT_FILE.read_text(encoding="utf-8").rstrip()
+        self.system_prompt = base + (f"\n\n### USE-CASE INSTRUCTIONS:\n{hints.strip()}" if hints.strip() else "")
         self.llm_with_tools = llm.bind_tools(tools)
         # Same tool schemas (the history contains tool calls), but calling them is forbidden
         self.llm_final = llm.bind_tools(tools, tool_choice="none")

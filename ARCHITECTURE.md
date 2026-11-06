@@ -55,6 +55,7 @@ flowchart TD
 * **Cosa include:**
   - `agent_graph.py`: entrypoint, costruzione del grafo, sessione MCP con il caso di studio e ciclo CLI. La conversazione resta in memoria per tutta la chat; a ogni turno si azzerano contatori e verdetto.
   - `config.py`: la dataclass `UseCaseConfig` e `load_use_case()`.
+  - `planner_prompt.md`: system prompt generico del Planner, a cui si accodano i `planner_hints` del caso di studio. I tool non vi sono elencati: l'LLM ne riceve gli schemi tramite function calling.
   - Nodi del grafo: `planner_node.py`, `formal_gate_node.py` (che contiene anche `parse_mcp_response`, la decodifica delle risposte dei tool MCP); stato condiviso in `agent_state.py`.
   - `cli_formatter.py`: visualizzazione in terminale e lettura dell'input; un testo incollato resta un unico messaggio fino a Invio.
 * **Cosa NON include:**
@@ -66,7 +67,7 @@ flowchart TD
 ### 2.2 `use_cases/<nome>/` — Casi di Studio
 * **Ruolo:** collegare il motore a un dominio concreto.
 * **Contenuto obbligatorio:**
-  - `config.py` con `USE_CASE = UseCaseConfig(...)`, che definisce `mcp_server_command` ed eventualmente `max_steps_per_turn` e `planner_hints` (istruzioni di dominio aggiunte al prompt del Planner);
+  - `config.py` con `USE_CASE = UseCaseConfig(...)`, che definisce `mcp_server_command` ed eventualmente `max_steps_per_turn` e `planner_hints` (istruzioni di dominio aggiunte al prompt del Planner, che il pillbox legge da `planner_hints.md`);
   - `binding.py` con l'implementazione del `ModelBinding` del dominio;
   - la configurazione di enforcement (es. `enforcement.json`), con i modelli da caricare da `resources/` nella sezione `asmeta` e i parametri fidati;
   - `mcp_server.py`, che chiama `enforcement.bootstrap.run_mcp_server` con il binding e la configurazione.

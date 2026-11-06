@@ -134,7 +134,7 @@ Credenziali, parametri di connessione e selezione del caso di studio:
 Ogni caso di studio definisce `USE_CASE = UseCaseConfig(...)` con:
 * **`mcp_server_command`**: Comando stdio del server MCP del caso di studio.
 * **`max_steps_per_turn`**: Numero massimo di passi del Planner per turno (default 3).
-* **`planner_hints`**: Istruzioni di dominio aggiunte al prompt del Planner.
+* **`planner_hints`**: Istruzioni di dominio aggiunte al prompt del Planner (il pillbox le legge da `use_cases/pillbox/planner_hints.md`). Il prompt generico è in `core/planner_prompt.md`.
 
 ### Aggiungere un Nuovo Caso di Studio
 1. Aggiungi i modelli ASM in `resources/models/`.
