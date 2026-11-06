@@ -14,11 +14,12 @@ class AgentState(TypedDict):
     messages: Annotated[List[AnyMessage], add_messages]
 
     # Formal gate evaluation of the last tool call (reset at every user message).
-    # BYPASS = read-only tool run directly; APPROVED = executed as requested;
-    # SHIELDED = executed after correction; REPLAN = nothing executed, try again;
-    # BLOCKED = nothing executed, answer only; ERROR = operational failure, turn ends.
+    # The four enforcer decisions are used unchanged (see enforcement/contracts.py):
+    # ALLOW = executed as requested; REPLACE = executed after correction;
+    # REPLAN = nothing executed, try again; BLOCK = nothing executed, answer only.
+    # The gate adds BYPASS = read-only tool run directly; ERROR = operational failure, turn ends.
     guard_verdict: Optional[
-        Literal["APPROVED", "ERROR", "BYPASS", "SHIELDED", "REPLAN", "BLOCKED"]
+        Literal["ALLOW", "REPLACE", "REPLAN", "BLOCK", "BYPASS", "ERROR"]
     ]
     guard_feedback: Optional[str]  # human-readable reason, shown in the console
 

@@ -66,8 +66,8 @@ def gate_router(state: AgentState) -> str:
 
     Every verdict except ERROR returns to the planner: it needs the tool result to continue
     or to write the final answer. ERROR (operational failure) ends the turn at once."""
-    # BLOCKED goes back only for the final explanation (final_answer_only)
-    if state.get("guard_verdict") in ("BYPASS", "APPROVED", "SHIELDED", "REPLAN", "BLOCKED"):
+    # BLOCK goes back only for the final explanation (final_answer_only)
+    if state.get("guard_verdict") in ("BYPASS", "ALLOW", "REPLACE", "REPLAN", "BLOCK"):
         return "planner"
     return END
 

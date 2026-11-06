@@ -89,8 +89,8 @@ def get_status_spinner(message: str = "Processing..."):
 # ============================================================================
 
 _VERDICT_STYLES = {
-    "APPROVED": "green", "ERROR": "red",
-    "SHIELDED": "yellow", "REPLAN": "yellow", "BLOCKED": "red",
+    "ALLOW": "green", "ERROR": "red",
+    "REPLACE": "yellow", "REPLAN": "yellow", "BLOCK": "red",
 }
 
 def _render_planner(update: Dict[str, Any]) -> None:

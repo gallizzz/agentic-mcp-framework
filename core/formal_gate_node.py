@@ -9,11 +9,11 @@ Decision table for the FIRST tool call of the planner message (fail-closed):
     any other tool but submit_plan -> not run, turn ends                 verdict ERROR
     submit_plan                    -> sent to the server; its answer is
         rejected before the ASMs (schema/binding)                        verdict REPLAN
-        decision ALLOW / REPLACE / REPLAN / BLOCK                        APPROVED / SHIELDED / REPLAN / BLOCKED
+        decision ALLOW / REPLACE / REPLAN / BLOCK                        same as the decision
         operational failure or unknown decision                          verdict ERROR (turn ends)
 
-The gate never decides: the decision comes from the ASM models behind the server and is only
-translated (`DECISION_VERDICTS`) into a message the planner LLM can use.
+The gate never decides: the decision comes from the ASM models behind the server and is used
+unchanged as verdict; the gate only adds the instructions the planner LLM needs to use it.
 """
 
 import copy
@@ -23,14 +23,14 @@ import uuid
 from langchain_core.messages import ToolMessage
 from langchain_core.tools import BaseTool
 from core.agent_state import AgentState
-from enforcement.contracts import DECISION_VERDICTS, SUBMIT_ARGUMENT, SUBMIT_TOOL
+from enforcement.contracts import FINAL_DECISIONS, SUBMIT_ARGUMENT, SUBMIT_TOOL
 
 # Async callable (tool args) -> (is_error, raw text result) bound to the MCP session
 SubmitCallable = Callable[[Dict[str, Any]], Awaitable[Tuple[bool, str]]]
 
-APPROVED_NOTICE = "[FORMAL GATE: APPROVED] Action verified and executed exactly as proposed."
+ALLOW_NOTICE = "[FORMAL GATE: ALLOW] Action verified and executed exactly as proposed."
 REPLAN_NOTICE = "[FORMAL GATE: REPLAN] No change was applied."
-BLOCKED_NOTICE = "[FORMAL GATE: BLOCKED] Action blocked by the formal enforcer."
+BLOCK_NOTICE = "[FORMAL GATE: BLOCK] Action blocked by the formal enforcer."
 
 # What an operational failure did to the live system (the turn ends right after it)
 COMMIT_OUTCOME_NOTICES = {
@@ -101,7 +101,7 @@ def _shielding_notice(
 ) -> str:
     """Tells the Planner that the enforcer replaced the proposed action."""
     return (
-        f"[FORMAL GATE INTERVENTION - SHIELDING APPLIED]\n"
+        f"[FORMAL GATE: REPLACE - SHIELDING APPLIED]\n"
         f"Action originally proposed by the Planner: {submitted.get('args')}\n"
         f"Shielded action executed for safety: {applied_action}\n"
         f"Formal Gate reason: {feedback}\n"
@@ -218,11 +218,10 @@ class FormalGateNode:
             return self._block(_failure_feedback(result, raw), tool_call_id)
 
         decision = result.get("decision")
-        verdict = DECISION_VERDICTS.get(decision)
-        if verdict is None:
-            return self._block(f"Unmapped enforcement decision '{decision}'.", tool_call_id)
+        if decision not in FINAL_DECISIONS:
+            return self._block(f"Unknown enforcement decision '{decision}'.", tool_call_id)
         return self._submit_result(
-            verdict, f"{decision}: {result.get('reason')}",
+            decision, f"{decision}: {result.get('reason')}",
             submitted, result, tool_call_id,
         )
 
@@ -250,26 +249,26 @@ class FormalGateNode:
         """Builds the gate update and the ToolMessage the Planner reads for a submit outcome."""
         result_text = json.dumps(_compact_result(result), ensure_ascii=False)
         shown_feedback = feedback
-        if verdict == "SHIELDED":
+        if verdict == "REPLACE":
             applied_action = result.get("applied_action")
             shown_feedback = f"{feedback} | Applied: {applied_action}"
             content = _shielding_notice(submitted, applied_action, feedback, result_text)
             content += _remaining_actions_notice(submitted)
-        elif verdict == "APPROVED":
-            content = f"{APPROVED_NOTICE}\n{result_text}{_remaining_actions_notice(submitted)}"
+        elif verdict == "ALLOW":
+            content = f"{ALLOW_NOTICE}\n{result_text}{_remaining_actions_notice(submitted)}"
         elif verdict == "REPLAN":
             content = f"{REPLAN_NOTICE} Reason: {feedback}\n{result_text}"
         else:
-            content = f"{BLOCKED_NOTICE} Reason: {feedback}\n{result_text}"
+            content = f"{BLOCK_NOTICE} Reason: {feedback}\n{result_text}"
 
         return _gate_result(
             verdict, shown_feedback,
-            final_answer_only=verdict == "BLOCKED",
+            final_answer_only=verdict == "BLOCK",
             messages=[
                 ToolMessage(
                     content=content,
                     tool_call_id=tool_call_id,
-                    status="success" if verdict in ("APPROVED", "SHIELDED") else "error",
+                    status="success" if verdict in ("ALLOW", "REPLACE") else "error",
                 )
             ],
         )

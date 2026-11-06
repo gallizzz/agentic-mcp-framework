@@ -178,13 +178,13 @@ sequenceDiagram
         Server->>Server: enforcer ASM, preview, commit sul live, ACK
         alt ALLOW / REPLACE
             Server-->>Gate: azione eseguita (originale o corretta)
-            Gate-->>Planner: APPROVED / SHIELDED con esito e azioni rimanenti
+            Gate-->>Planner: ALLOW / REPLACE con esito e azioni rimanenti
         else REPLAN o piano rifiutato prima degli ASM (schema o binding)
             Server-->>Gate: nessuna modifica, motivo
             Gate-->>Planner: feedback per ripianificare
         else BLOCK
             Server-->>Gate: nessuna modifica, motivo
-            Gate-->>Planner: BLOCKED, solo risposta finale (nessun tool, final_answer_only)
+            Gate-->>Planner: BLOCK, solo risposta finale (nessun tool, final_answer_only)
         else errore operativo
             Gate-->>Utente: ERROR con l'esito del comando (applicato, non applicato, sconosciuto), fine turno, nessuna azione di ripiego
         end

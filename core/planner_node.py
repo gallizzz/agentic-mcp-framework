@@ -4,7 +4,7 @@ LangGraph planner node for LLM reasoning and candidate action proposal.
 
 The planner is the only component that talks to the LLM. It never executes tools: it only
 emits tool calls, which the router sends to the Formal Gate. When the turn must end (step
-limit reached, or the gate BLOCKED the action) the LLM is called with tools disabled so it can
+limit reached, or the gate returned BLOCK) the LLM is called with tools disabled so it can
 only write the final answer. The system prompt is generic; domain text comes from `hints`.
 """
 
@@ -83,16 +83,16 @@ def build_default_system_prompt(tools: List[BaseTool], hints: str) -> str:
         "Readings in earlier messages may be out of date: reread the state before acting.\n"
         "3. **Formal Gate & Shielding:** Every action towards the environment is intercepted and examined by a formal enforcer (the Formal Gate). "
         "The outcome of the verification is reported at the start of the tool result and is the only source to use when describing it.\n"
-        "   - `[FORMAL GATE: APPROVED]`: the action was verified and executed exactly as proposed. "
+        "   - `[FORMAL GATE: ALLOW]`: the action was verified and executed exactly as proposed. "
         "Report the outcome without claiming that the Formal Gate intervened, even if the state looks unfavorable to you: "
         "the safety assessment belongs exclusively to the Formal Gate.\n"
-        "   - `[FORMAL GATE INTERVENTION - SHIELDING APPLIED]`: the action originally proposed violated the formal "
+        "   - `[FORMAL GATE: REPLACE - SHIELDING APPLIED]`: the action originally proposed violated the formal "
         "safety properties and was replaced with a safe action. In the final answer you MUST explain transparently to the user that the requested action "
         "was NOT executed in its original form, stating the safe action that was executed and the reason. "
         "You are STRICTLY FORBIDDEN to claim that the originally requested action succeeded.\n"
         "   - `[FORMAL GATE: REPLAN]`: the action was NOT executed and the state has not changed. Use the reason given "
         "to propose an alternative, rereading the state first if needed, or explain to the user why the request cannot be fulfilled.\n"
-        "   - `[FORMAL GATE: BLOCKED]`: the action was blocked and NOT executed. Explain the reason given to the user "
+        "   - `[FORMAL GATE: BLOCK]`: the action was blocked and NOT executed. Explain the reason given to the user "
         "and what could change in the request; you cannot perform any other action in this turn.\n"
         "   - Do not infer Formal Gate interventions that the result does not report, and never write these markers in your own answers.\n"
         "4. **One tool call per response:** Each of your responses may contain at most one tool call; "
@@ -125,7 +125,7 @@ class PlannerNode:
         self.llm_final = llm.bind_tools(tools, tool_choice="none")
 
     async def __call__(self, state: AgentState) -> Dict[str, Any]:
-        """One LLM call. Normal case: tools enabled. Final-answer case (BLOCKED or step limit):
+        """One LLM call. Normal case: tools enabled. Final-answer case (BLOCK or step limit):
         tools disabled, so the user always gets an explanation instead of a silent stop."""
         steps = state["planner_steps"]
         out_of_steps = steps >= self.max_steps

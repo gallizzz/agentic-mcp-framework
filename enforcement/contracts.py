@@ -2,7 +2,7 @@
 
 This is the file to read first when writing a new use case. It defines:
 
-* the constants shared with the agent's Formal Gate (tool names, decision -> verdict map);
+* the constants shared with the agent's Formal Gate (tool names, final decisions);
 * the data objects exchanged between the gateway, the preview orchestrator and the binding
   (`Plan`, `Action`, `Command`, `PreviewRequest`, `PreviewResult`, `EnforcerOutput`, `AsmState`);
 * `AsmService`, the runtime interface (implemented by the REST client);
@@ -25,17 +25,13 @@ from pydantic import BaseModel, ConfigDict, Field
 SUBMIT_TOOL = "submit_plan"  # the ONLY tool that modifies the system
 SUBMIT_ARGUMENT = "submission"  # name of the Plan parameter of SUBMIT_TOOL
 STATE_TOOL = "get_system_state"  # read-only; also used as the startup health check
-# Final decisions of the enforcer (the ASM) -> verdicts shown by the Formal Gate:
+# Final decisions of the enforcer (the ASM), used unchanged as Formal Gate verdicts:
 #   ALLOW   the action was executed as requested
 #   REPLACE the ASM corrected the action; the corrected one was executed
 #   REPLAN  nothing was executed; the planner can propose something else
 #   BLOCK   nothing was executed; the turn ends with an explanation
-DECISION_VERDICTS = {
-    "ALLOW": "APPROVED",
-    "REPLACE": "SHIELDED",
-    "REPLAN": "REPLAN",
-    "BLOCK": "BLOCKED",
-}
+# Any other value is not a final decision (the gateway and the gate reject it).
+FINAL_DECISIONS = frozenset({"ALLOW", "REPLACE", "REPLAN", "BLOCK"})
 
 class AsmError(RuntimeError):
     """The service or the execution protocol did not provide valid evidence.
@@ -157,7 +153,7 @@ class EnforcerOutput:
     second step carries the `command` (only if the preview was compatible) or a final
     decision without command. The request_id must always equal the gateway's command_id."""
     request_id: int
-    decision: str  # final when it is a key of DECISION_VERDICTS (the gateway rejects anything else at the end)
+    decision: str  # final when it is in FINAL_DECISIONS (the gateway rejects anything else at the end)
     reason: str  # reason code, explained by ModelBinding.reason_glossary()
     command: Command | None = None
     preview_request: PreviewRequest | None = None
