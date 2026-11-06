@@ -23,7 +23,6 @@ import uuid
 from langchain_core.messages import ToolMessage
 from langchain_core.tools import BaseTool
 from core.agent_state import AgentState
-from core.mcp_utils import parse_mcp_response
 from enforcement.contracts import DECISION_VERDICTS, SUBMIT_ARGUMENT, SUBMIT_TOOL
 
 # Async callable (tool args) -> (is_error, raw text result) bound to the MCP session
@@ -44,6 +43,16 @@ RECOVERY_NOTICE = "Changes are disabled until the agent is restarted."
 # ============================================================================
 # HELPER FUNCTIONS
 # ============================================================================
+
+def parse_mcp_response(raw: str) -> Dict[str, Any]:
+    """Parses the text of an MCP tool result; anything but a JSON object gives an empty dict.
+
+    Also used by agent_graph.py for the startup availability check."""
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        return {}
+    return data if isinstance(data, dict) else {}
 
 def _extract_candidate_action(last_msg: Any) -> Tuple[Dict[str, Any], Optional[str]]:
     """Returns the first tool call of the Planner message (the router only sends tool calls here)."""

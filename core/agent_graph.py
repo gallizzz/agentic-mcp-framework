@@ -45,8 +45,7 @@ from core.cli_formatter import (
     print_success,
 )
 from core.config import UseCaseConfig, load_use_case
-from core.formal_gate_node import FormalGateNode, SubmitCallable
-from core.mcp_utils import parse_mcp_response
+from core.formal_gate_node import FormalGateNode, SubmitCallable, parse_mcp_response
 from core.planner_node import create_planner_node, create_planner_router
 from enforcement.contracts import DEFAULT_URL, STATE_TOOL, SUBMIT_TOOL
 load_dotenv()  # reads .env (GOOGLE_API_KEY, USE_CASE, ASMETAS_URL, ...)

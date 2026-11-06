@@ -55,8 +55,7 @@ flowchart TD
 * **Cosa include:**
   - `agent_graph.py`: entrypoint, costruzione del grafo, sessione MCP con il caso di studio e ciclo CLI. La conversazione resta in memoria per tutta la chat; a ogni turno si azzerano contatori e verdetto.
   - `config.py`: la dataclass `UseCaseConfig` e `load_use_case()`.
-  - Nodi del grafo: `planner_node.py`, `formal_gate_node.py`; stato condiviso in `agent_state.py`.
-  - `mcp_utils.py`: decodifica delle risposte dei tool MCP.
+  - Nodi del grafo: `planner_node.py`, `formal_gate_node.py` (che contiene anche `parse_mcp_response`, la decodifica delle risposte dei tool MCP); stato condiviso in `agent_state.py`.
   - `cli_formatter.py`: visualizzazione in terminale e lettura dell'input; un testo incollato resta un unico messaggio fino a Invio.
 * **Cosa NON include:**
   - **NON contiene i modelli formali ASM (`.asm`):** stanno in `resources/`.
