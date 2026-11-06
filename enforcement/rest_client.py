@@ -1,5 +1,9 @@
-"""HTTP client for the original FOSELAB AsmetaServer.jar.
+"""HTTP client for the original FOSELAB AsmetaServer.jar (AsmetaS-web-service).
 
+The service is external and cannot be modified: any adaptation goes here. The client is
+deliberately paranoid. It validates every answer (session id, model name, SAFE outcome,
+type of every value) and, after the first error, refuses all further calls except
+`/stop-model`, because a timeout may follow a step the server already applied.
 No AsmetaComp, Java bridge, generated scripts, or automatic write retries.
 """
 
@@ -10,6 +14,9 @@ from .contracts import AsmError, AsmState
 logger = logging.getLogger(__name__)
 
 class AsmetaRestClient:
+    """Implements `contracts.AsmService` over REST, keeping track of the sessions it opened
+    (`close()` stops only those, never sessions of other users of the service)."""
+
     def __init__(self, base_url: str, timeout: float = 30.0):
         self.http = httpx.Client(base_url=base_url, timeout=timeout,
                                  trust_env=False, follow_redirects=False)
@@ -35,6 +42,7 @@ class AsmetaRestClient:
             raise AsmError(f"{method} {path} failed; not retried: {exc}") from exc
 
     def running_models(self) -> dict:
+        """Active sessions on the service (used by deploy to know whether it is idle)."""
         models = self._request("GET", "/running-models").get("models")
         if not isinstance(models, dict):
             raise AsmError("Invalid running-models response")
@@ -54,6 +62,7 @@ class AsmetaRestClient:
                           files={"file": (path.name, stream, "text/plain")}, parse_json=False)
 
     def start(self, model_name: str) -> int:
+        """Starts a session of an already uploaded model; returns the service's session id."""
         if Path(model_name).name != model_name or not model_name.endswith(".asm"):
             raise ValueError("Use a trusted deployed model name, not a client filesystem path")
         data = self._request("POST", "/start", params={"name": model_name})
@@ -67,6 +76,7 @@ class AsmetaRestClient:
         return session_id
 
     def _state(self, data: dict, session_id: int) -> AsmState:
+        """Validates a step/status answer and converts it to an AsmState (anything odd raises)."""
         if session_id not in self.sessions:
             raise AsmError("Unknown or closed session")
         if type(data.get("id")) is not int or data["id"] != session_id:
@@ -93,6 +103,7 @@ class AsmetaRestClient:
         return AsmState(outputs, controlled)
 
     def step(self, session_id: int, inputs: dict[str, str]) -> AsmState:
+        """Executes one ASM step with the given monitored variables (ASM literals as strings)."""
         if session_id not in self.sessions:
             raise AsmError("Unknown or closed session")
         if any(not isinstance(k, str) or not isinstance(v, str) for k, v in inputs.items()):
@@ -107,10 +118,12 @@ class AsmetaRestClient:
             raise
 
     def read(self, session_id: int) -> AsmState:
+        """Current state of a session, without running a step."""
         data = self._request("GET", "/get-model-status", params={"id": session_id})
         return self._state(data, session_id)
 
     def stop(self, session_id: int) -> None:
+        """Stops a session of this client (no-op if unknown)."""
         if session_id not in self.sessions:
             return
         data = self._request("DELETE", "/stop-model", params={"id": session_id})
@@ -119,6 +132,7 @@ class AsmetaRestClient:
         del self.sessions[session_id]
 
     def close(self) -> None:
+        """Stops every session opened by this client, then closes the HTTP connection."""
         for session_id in list(self.sessions):
             try:
                 self.stop(session_id)

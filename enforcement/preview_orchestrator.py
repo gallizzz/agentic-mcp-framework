@@ -1,4 +1,13 @@
-"""Execute candidate + residual actions; the coordinator ASM decides the verdict."""
+"""Preview: simulates a plan on a twin of the live system; the coordinator ASM judges it.
+
+Flow of `PreviewOrchestrator.run`:
+    twin = replay of the live device (isolated, same state);
+    coordinator = fresh session of the coordinator model;
+    coordinator `begin`  -> executes each action (candidate first, then the rest of the plan)
+    on the twin and runs coordinator `inspect` after each one -> coordinator `finalize`
+    (checks the user's goals) -> the binding decodes the verdict.
+The live system is never touched; both temporary sessions are always stopped.
+"""
 
 import logging
 from .asm_runtime import ASMRuntimeAdapter, Snapshot
@@ -6,12 +15,16 @@ from .contracts import Action, AsmError, ModelBinding, PreviewRequest, PreviewRe
 logger = logging.getLogger(__name__)
 
 class PreviewOrchestrator:
+    """Runs previews. It only sequences steps: compatibility rules live in the coordinator ASM."""
+
     def __init__(self, runtime: ASMRuntimeAdapter, binding: ModelBinding):
         self.runtime = runtime
         self.binding = binding
 
     def run(self, snapshot: Snapshot, request: PreviewRequest,
             residual: list[Action], goals: dict) -> PreviewResult:
+        """`request.candidate` is the (possibly corrected) first action proposed by the enforcer,
+        `residual` the remaining actions of the plan, `goals` the plan's constraints."""
         if request.base_version != self.binding.version(snapshot.state):
             raise AsmError("Preview request does not match the live snapshot")
         twin = self.runtime.replay(snapshot)
@@ -22,6 +35,8 @@ class PreviewOrchestrator:
             current = self.runtime.read(twin)
             inputs = self.binding.preview_inputs(current, "begin", request)
             checked = self.runtime.step(coordinator, inputs)
+            # The coordinator may already conclude at `begin` (e.g. invalid request): then
+            # there is nothing to simulate and its result is used as is.
             if not checked.boolean("previewCompleted"):
                 actions = [request.candidate] + residual
                 for index, action in enumerate(actions):

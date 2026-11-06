@@ -2,6 +2,18 @@
 
 LangGraph node between the Planner and the enforcement MCP server: it runs the read-only
 tools directly and sends every action to the server, which verifies and executes it.
+
+Decision table for the FIRST tool call of the planner message (fail-closed):
+
+    read-only tool (readOnlyHint)  -> run directly                       verdict BYPASS
+    any other tool but submit_plan -> not run, turn ends                 verdict ERROR
+    submit_plan                    -> sent to the server; its answer is
+        rejected before the ASMs (schema/binding)                        verdict REPLAN
+        decision ALLOW / REPLACE / REPLAN / BLOCK                        APPROVED / SHIELDED / REPLAN / BLOCKED
+        operational failure or unknown decision                          verdict ERROR (turn ends)
+
+The gate never decides: the decision comes from the ASM models behind the server and is only
+translated (`DECISION_VERDICTS`) into a message the planner LLM can use.
 """
 
 import copy
@@ -130,6 +142,7 @@ class FormalGateNode:
     """
 
     def __init__(self, submit_callable: SubmitCallable, read_only_tools: List[BaseTool]):
+        # read_only_tools: only the tools the server annotated `readOnlyHint`
         self.submit_callable = submit_callable
         self.read_only_tools = {tool.name: tool for tool in read_only_tools}
 
@@ -148,6 +161,7 @@ class FormalGateNode:
         )
 
     async def __call__(self, state: AgentState) -> Dict[str, Any]:
+        """LangGraph entry: evaluates the planner's last message (it always has tool calls)."""
         last_msg = state["messages"][-1]
         result = await self._evaluate(last_msg)
         skipped_messages = _skip_extra_tool_calls(last_msg)
@@ -156,6 +170,7 @@ class FormalGateNode:
         return result
 
     async def _evaluate(self, last_msg: Any) -> Dict[str, Any]:
+        """Applies the decision table above to the first tool call of the message."""
         candidate_action, tool_call_id = _extract_candidate_action(last_msg)
         tool_name = candidate_action["name"]
 
@@ -180,6 +195,8 @@ class FormalGateNode:
         except Exception as e:
             return self._block(f"Enforcement server unreachable: {e}", tool_call_id)
 
+        # Interpret the server answer. `status` is "completed" when the ASMs decided,
+        # "invalid_request" when the plan was refused before them, anything else is a failure.
         result = parse_mcp_response(raw)
         if is_error or result.get("status") == "invalid_request":
             # Rejected before reaching the ASM models (schema or binding validation)

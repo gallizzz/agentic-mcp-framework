@@ -1,6 +1,19 @@
 """The graph-based orchestrator for LangGraph.
 
-LangGraph execution pipeline coordinating the Planner and Formal Gate nodes."""
+LangGraph execution pipeline coordinating the Planner and Formal Gate nodes.
+
+READING GUIDE (startup to answer):
+    main() -> load_use_case(USE_CASE) -> enforcement_session()   [fail-fast checks]
+           -> build_formal_gate_graph() -> CLI loop, one graph run per user message.
+Graph, for each message:
+
+    START -> planner --(tool call)--> formal_gate --(verdict)--> planner ... -> END
+    planner --(plain text answer, no tool call)-------------------------> END
+
+The planner (LLM) proposes tool calls; the formal gate runs read-only tools directly and
+sends `submit_plan` to the use-case MCP server, which verifies it with the ASM models.
+Nothing in this file knows any domain: it all comes from `UseCaseConfig`.
+"""
 
 from contextlib import asynccontextmanager
 import asyncio
@@ -36,7 +49,7 @@ from core.formal_gate_node import FormalGateNode, SubmitCallable
 from core.mcp_utils import parse_mcp_response
 from core.planner_node import create_planner_node, create_planner_router
 from enforcement.contracts import DEFAULT_URL, STATE_TOOL, SUBMIT_TOOL
-load_dotenv()
+load_dotenv()  # reads .env (GOOGLE_API_KEY, USE_CASE, ASMETAS_URL, ...)
 os.environ["TZ"] = "Europe/Rome"
 if hasattr(time, "tzset"):
     time.tzset()
@@ -50,7 +63,10 @@ CHAT_CONFIG = {"configurable": {"thread_id": "chat"}}
 # ============================================================================
 
 def gate_router(state: AgentState) -> str:
-    """Routes after Formal Gate evaluation (replan rounds are bounded by the planner)."""
+    """Routes after Formal Gate evaluation (replan rounds are bounded by the planner).
+
+    Every verdict except ERROR returns to the planner: it needs the tool result to continue
+    or to write the final answer. ERROR (operational failure) ends the turn at once."""
     # BLOCKED goes back only for the final explanation (final_answer_only)
     if state.get("guard_verdict") in ("BYPASS", "APPROVED", "SHIELDED", "REPLAN", "BLOCKED"):
         return "planner"
@@ -74,7 +90,12 @@ def build_formal_gate_graph(
     server_tools: List[BaseTool],
     submit_callable: SubmitCallable,
 ):
-    """Builds the pipeline graph: Planner (LLM) <-> Formal Gate."""
+    """Builds the pipeline graph: Planner (LLM) <-> Formal Gate.
+
+    `server_tools` are the MCP tools discovered on the use-case server; the planner sees all
+    of them, the gate runs directly only those marked read-only. `submit_callable` is how the
+    gate reaches `submit_plan` on the persistent MCP session. The `InMemorySaver` keeps the
+    conversation between messages for the whole process lifetime."""
     builder = StateGraph(AgentState)
     builder.add_node(
         "planner",
@@ -101,7 +122,11 @@ def build_formal_gate_graph(
 # ============================================================================
 
 def _build_mcp_config(use_case: UseCaseConfig) -> Dict[str, Dict[str, Any]]:
-    """Builds the stdio configuration of the use-case MCP server."""
+    """Builds the stdio configuration of the use-case MCP server.
+
+    The server is a child process and inherits only basic system variables plus the ones
+    listed in `env` here: a variable set in the agent's .env does NOT reach it unless added
+    to this dict (as done for ASMETAS_URL). Add use-case variables here if a server needs them."""
     env_cmd, *env_args = use_case.mcp_server_command
     return {
         "use_case_server": {
@@ -124,11 +149,14 @@ async def enforcement_session(use_case: UseCaseConfig):
     try:
         async with client.session("use_case_server") as mcp_session:
             server_tools = await load_mcp_tools(mcp_session, server_name="use_case_server")
+            # Startup checks (fail-fast): the server must expose the two contract tools,
+            # and the state tool must be read-only so the gate may call it directly.
             if SUBMIT_TOOL not in {t.name for t in server_tools}:
                 raise RuntimeError(f"Submit tool '{SUBMIT_TOOL}' missing from the use-case server.")
             if STATE_TOOL not in {t.name for t in _read_only_tools(server_tools)}:
                 raise RuntimeError(f"State tool '{STATE_TOOL}' missing or not declared read-only.")
 
+            # Availability check: a real read of the live system through the whole chain
             health = await mcp_session.call_tool(STATE_TOOL, {})
             health_raw = _result_text(health)
             health_data = parse_mcp_response(health_raw)
@@ -138,10 +166,11 @@ async def enforcement_session(use_case: UseCaseConfig):
             print_success(f"Enforcement server ready ('{STATE_TOOL}' answered).")
 
             async def submit(args: Dict[str, Any]) -> tuple[bool, str]:
+                """Calls `submit_plan`; returns (is_error, raw text) for the Formal Gate to interpret."""
                 result = await mcp_session.call_tool(SUBMIT_TOOL, args)
                 return bool(result.isError), _result_text(result)
 
-            started = True
+            started = True  # from now on errors are session errors, not startup errors
             yield server_tools, submit
     except Exception as e:
         if started or isinstance(e, RuntimeError):
@@ -170,6 +199,8 @@ def _turn_input(user_input: str) -> AgentState:
     }
 
 async def main():
+    """Interactive entry point: any startup failure prints the error and exits with code 1
+    BEFORE the `You:` prompt appears."""
     print_banner()
 
     model_name = os.getenv("GEMINI_MODEL", "gemini-flash-lite-latest")
@@ -196,6 +227,7 @@ async def main():
                     if command.lower() in EXIT_COMMANDS:
                         break
 
+                    # One graph run per user message; each node update is printed as it happens
                     with get_status_spinner("Running agent..."):
                         async for step_output in graph.astream(_turn_input(user_input), CHAT_CONFIG):
                             print_step_update(step_output)
@@ -204,6 +236,7 @@ async def main():
                 except (KeyboardInterrupt, EOFError):
                     break
                 except Exception as e:
+                    # An error inside a turn (e.g. LLM API) must not kill the chat
                     print_error(f"Execution error: {e}")
 
     except Exception as err:

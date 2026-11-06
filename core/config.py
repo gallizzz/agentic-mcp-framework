@@ -18,8 +18,12 @@ class UseCaseConfig:
     The use-case MCP server verifies every action with its ASM models through the
     enforcement framework, executes it and returns the decision to the Formal Gate.
     """
+    # Command that starts the use-case MCP server (stdio), e.g. [sys.executable, ".../mcp_server.py"]
     mcp_server_command: List[str]
+    # Maximum planner steps (LLM calls) in one user turn: bounds replanning and multi-action plans
     max_steps_per_turn: int = 3
+    # Domain instructions appended to the planner system prompt (English; the user's
+    # vocabulary, unit conversions, how to talk about results)
     planner_hints: str = ""
 
     def __post_init__(self):

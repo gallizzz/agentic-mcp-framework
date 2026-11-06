@@ -2,6 +2,13 @@
 
 Started by enforcement/bootstrap.py in the MCP server of a use case.
 Only stdio is exposed; the ASMETA HTTP service stays private.
+
+Tools exposed (names are fixed by `contracts`, the same for every use case):
+    get_system_state  read-only (`readOnlyHint`): the Formal Gate runs it without verification;
+    get_plan_status   read-only: result of an earlier submission;
+    submit_plan       the ONLY tool that changes the system. Its description is assembled from
+                      SUBMIT_DESCRIPTION (generic) + `binding.plan_description()` (domain).
+Every other tool added here would be blocked by the Formal Gate unless it is read-only.
 """
 
 import asyncio
@@ -27,6 +34,9 @@ SUBMIT_DESCRIPTION = (
 
 
 def _guarded(call: Callable[..., dict], *args: Any) -> dict:
+    """Turns exceptions into the status field the Formal Gate understands:
+    `recovery_required` for operational failures (AsmError), `invalid_request` for plans
+    rejected before reaching the ASM models (schema or binding validation)."""
     try:
         return call(*args)
     except AsmError as exc:
@@ -36,6 +46,8 @@ def _guarded(call: Callable[..., dict], *args: Any) -> dict:
 
 
 def serve(gateway: EnforcementGateway) -> None:
+    """Registers the tools and blocks serving MCP over stdio until the agent disconnects.
+    Calls run in a worker thread because the gateway uses blocking HTTP."""
     from mcp.server.fastmcp import FastMCP
     from mcp.types import ToolAnnotations
 

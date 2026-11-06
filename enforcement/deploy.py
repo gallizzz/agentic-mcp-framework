@@ -1,4 +1,8 @@
-"""Uploads the ASM models and libraries listed by a use case to the ASMETA service."""
+"""Uploads the ASM models and libraries listed by a use case to the ASMETA service.
+
+Runs only at startup, before any session is opened. This is the single place where `.asm`
+files leave the repository (`resources/`) and reach the service; graph nodes never do it.
+"""
 
 import logging
 from pathlib import Path

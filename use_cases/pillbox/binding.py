@@ -2,6 +2,15 @@
 
 The trusted JSON (enforcement.json) holds the synthetic temporal parameters of the scenarios.
 The LLM cannot provide clinical windows, minimum gaps, or preview verdicts.
+
+THIS FILE IS THE REFERENCE EXAMPLE of a `ModelBinding` (interface in enforcement/contracts.py).
+To write a new use case, copy this file and replace, in order:
+  1. the pydantic models of the action parameters and goals (what the LLM may send);
+  2. the names of the ASM files (class attributes of `PillboxBinding`);
+  3. the name lists and the two glossaries (`DEVICE_OUTPUTS`, `REASON_GLOSSARY`, ...);
+  4. the methods, which only map data to/from the monitored/out functions of YOUR ASM models.
+Those names (e.g. `agentRequestPending`, `previewBegin`) are the interface of the pillbox
+ASM models in resources/models/: they must match the declarations in the `.asm` files.
 """
 
 import json
@@ -14,7 +23,10 @@ from enforcement.contracts import (Action, AsmError, AsmState, Command, Enforcer
                            Plan, PreviewRequest, PreviewResult)
 
 
+# --- Schemas of what the LLM submits (strict: unknown fields or wrong types are rejected) ---
+
 class DoseParameters(BaseModel):
+    """Parameters of the only action kind, `reschedule`: move one dose to a new time."""
     model_config = ConfigDict(extra="forbid", strict=True)
     compartment: Literal["compartment1", "compartment2"]
     dose_index: int = Field(ge=0)
@@ -22,6 +34,9 @@ class DoseParameters(BaseModel):
 
 
 class Deadline(BaseModel):
+    """Optional deadline on one dose, `Goals.preview_deadline`. In the `finalize` preview phase
+    it is passed to the coordinator ASM, which checks it on the simulated plan. Note that
+    `plan_description` does not advertise it to the LLM."""
     model_config = ConfigDict(extra="forbid", strict=True)
     compartment: Literal["compartment1", "compartment2"]
     dose_index: int = Field(ge=0)
@@ -29,31 +44,40 @@ class Deadline(BaseModel):
 
 
 class Goals(BaseModel):
+    """Optional constraints the user gave for the FIRST action (`Plan.goals`)."""
     model_config = ConfigDict(extra="forbid", strict=True)
     available_from: int = Field(default=0, ge=0, le=1439)
     latest_time: int = Field(default=1439, ge=0, le=1439)
     preview_deadline: Deadline | None = None
 
 
+# Names of ASM functions, grouped by role. They decide which values are copied from one
+# ASM session to the inputs of another (see `select` and the *_inputs methods below).
+# Out-functions of the device model that the enforcer reads as monitored inputs
 DEVICE_OUTPUTS = {
     "isPillMissed", "pillTakenWithDelay", "actual_time_consumption", "day",
     "time_consumption", "drugIndex", "name", "redLed", "pillboxSystemTime",
     "scheduleVersion", "lastAppliedCommandId", "lastRejectedCommandId",
 }
+# Out-functions of the enforcer that form the command sent to the device
 COMMAND_OUTPUTS = {
     "setNewTime", "setOriginalTime", "newTime", "skipNextPill", "targetDoseIndex",
     "agentUpdate", "commandId", "commandBaseScheduleVersion",
 }
+# Enforcer outputs that identify a preview request; echoed back to the coordinator
 PREVIEW_METADATA = (
     "previewRequestId", "previewBaseScheduleVersion", "previewTargetCompartment",
     "previewTargetDoseIndex", "previewCandidateTime",
 )
+# Coordinator outputs fed back to the enforcer once the preview is complete
 PREVIEW_FEEDBACK = (
     "previewCompleted", "previewTimedOut", "previewResultRequestId",
     "previewResultBaseVersion", "previewOutcome",
 )
 
 
+# Reason codes returned by the enforcer ASM -> text the LLM uses to explain the outcome
+# (returned by `reason_glossary`). Every code the ASM can emit should have an entry.
 REASON_GLOSSARY = {
     "NO_REASON": "No problem. With REPLACE, the requested time was not allowed and was replaced with the one applied.",
     "STALE_STATE": "The version sent is not the current one, or the state changed during verification. "
@@ -73,32 +97,42 @@ REASON_GLOSSARY = {
 
 
 def hhmm(minutes: int) -> str:
+    """Minutes from midnight -> "HH:MM", so the LLM never converts times itself."""
     return f"{minutes // 60:02d}:{minutes % 60:02d}"
 
 
 def select(values: dict[str, str], names: set[str]) -> dict[str, str]:
+    """Keeps the entries whose function name (the part before `(`) is in `names`."""
     return {key: value for key, value in values.items() if key.split("(")[0] in names}
 
 
 def dose_action(compartment: str, index: int, time: int) -> Action:
+    """Builds the framework `Action` for a dose reschedule."""
     return Action(kind="reschedule", parameters={
         "compartment": compartment, "dose_index": index, "time": time,
     })
 
 
 class PillboxBinding:
+    """Binding of the pillbox: connects `reschedule` plans to the pillbox ASM models."""
+
+    # The four roles of the framework, mapped to files in resources/models/
     device_model = "pillboxDevice.asm"
     enforcer_model = "scheduler.asm"
     coordinator_model = "PreviewCoordinator.asm"
     setup_models = ("configurationMgr.asm",)
 
     def __init__(self, config_path: Path):
+        # Built by `run_mcp_server` with the path of enforcement.json: besides the "asmeta"
+        # section (read by the framework) the file holds the trusted parameters of this domain.
         self.config = json.loads(config_path.read_text(encoding="utf-8"))
         self.compartments = self.config["compartments"]
         if self.compartments != ["compartment1", "compartment2"]:
             raise ValueError("The included ASM bundle defines exactly two compartments")
 
     def plan_description(self) -> str:
+        # Appended to the `submit_plan` tool description: it is the LLM's only documentation
+        # of the action kinds and of `goals`. Keep it precise and in English.
         return (
             "Allowed actions in `actions`: only `{\"kind\": \"reschedule\", \"parameters\": "
             "{\"compartment\": ..., \"dose_index\": ..., \"time\": ...}}`, which moves a dose of a compartment "
@@ -131,6 +165,8 @@ class PillboxBinding:
                 raise ValueError("Deadline refers to an unknown dose index")
 
     def initial_inputs(self) -> dict[str, str]:
+        # Every monitored function of the device (and of the command interface) set to its
+        # idle value: later steps start from this and override only what they need.
         inputs = {"systemTime": str(self.config["system_time"]),
                   "openSwitch(1)": "false", "openSwitch(2)": "false"}
         for compartment in self.compartments:
@@ -143,9 +179,11 @@ class PillboxBinding:
         return inputs
 
     def version(self, state: AsmState) -> int:
+        # `scheduleVersion` grows at every applied change: it detects stale plans
         return state.integer("scheduleVersion")
 
     def summary(self, state: AsmState) -> dict:
+        # What `get_system_state` returns to the LLM (and what is attached to every result)
         schedule = {c: state.sequence(f"time_consumption({c})") for c in self.compartments}
         # The device model defines which medication each compartment holds
         medication = {c: state.literal(f"name({c})").strip('"') for c in self.compartments}
@@ -161,6 +199,8 @@ class PillboxBinding:
     def enforcer_inputs(self, live: AsmState, plan: Plan | None = None,
                         command_id: int = 0,
                         preview: PreviewResult | None = None) -> dict[str, str]:
+        # 1) Mirror the live device into the enforcer, 2) set the "no request" defaults,
+        # 3) overwrite with the request (`plan`) and 4) with the preview feedback, if any.
         inputs = select(live.outputs, DEVICE_OUTPUTS)
         inputs.update({
             "agentRequestPending": "false", "agentRequestId": "0",
@@ -172,6 +212,8 @@ class PillboxBinding:
             "previewResultRequestId": "0", "previewResultBaseVersion": "0", "previewOutcome": "PREVIEW_NONE",
         })
         if plan is not None:
+            # The enforcer evaluates only the first action; clinical windows come from the
+            # trusted config, never from the LLM.
             action = DoseParameters.model_validate(plan.actions[0].parameters)
             goals = Goals.model_validate(plan.goals)
             earliest, latest = self.config["windows"][action.compartment][action.dose_index]
@@ -188,6 +230,7 @@ class PillboxBinding:
         return inputs
 
     def enforcer_output(self, state: AsmState) -> EnforcerOutput:
+        # Decode decision/reason, then the optional preview request and the optional command
         result = EnforcerOutput(state.integer("decisionRequestId"),
                                 state.literal("agentDecision"), state.literal("agentReason"))
         if state.boolean("previewRequested"):
@@ -197,6 +240,7 @@ class PillboxBinding:
                 state.integer("previewRequestId"), state.integer("previewBaseScheduleVersion"),
                 candidate, {name: state.literal(name) for name in PREVIEW_METADATA},
             )
+        # A command exists when the enforcer raised `setNewTime` for a compartment
         active = [c for c in self.compartments if state.boolean(f"setNewTime({c})")]
         if active:
             if len(active) != 1 or not state.boolean(f"agentUpdate({active[0]})"):
@@ -212,6 +256,7 @@ class PillboxBinding:
         return result
 
     def command_inputs(self, live: AsmState, command: Command) -> dict[str, str]:
+        # Live-device step that applies the command: idle inputs + the enforcer's outputs
         inputs = self.initial_inputs()
         inputs["systemTime"] = live.literal("pillboxSystemTime")
         inputs.update(command.inputs)
@@ -219,6 +264,7 @@ class PillboxBinding:
 
     def action_inputs(self, current: AsmState, action: Action,
                       command_id: int) -> dict[str, str]:
+        # Same effect as `command_inputs`, but built directly from an action: used on the twin
         parameters = DoseParameters.model_validate(action.parameters)
         compartment = parameters.compartment
         inputs = self.initial_inputs()
@@ -232,11 +278,13 @@ class PillboxBinding:
         return inputs
 
     def same_target(self, left: Action, right: Action) -> bool:
+        # The enforcer may change the time (REPLACE) but never which dose is modified
         return (left.kind == right.kind and
                 left.parameters["compartment"] == right.parameters["compartment"] and
                 left.parameters["dose_index"] == right.parameters["dose_index"])
 
     def commit_applied(self, live: AsmState, command: Command) -> bool:
+        # ACK: the device recorded this command id, bumped the version and holds the new time
         parameters = DoseParameters.model_validate(command.action.parameters)
         compartment = parameters.compartment
         return (live.integer(f"lastAppliedCommandId({compartment})") == command.command_id and
@@ -244,6 +292,7 @@ class PillboxBinding:
                 live.sequence(f"time_consumption({compartment})")[parameters.dose_index] == parameters.time)
 
     def commit_rejected(self, live: AsmState, command: Command) -> bool:
+        # NACK: the device explicitly recorded this command id as rejected
         compartment = command.action.parameters["compartment"]
         return live.integer(f"lastRejectedCommandId({compartment})") == command.command_id
 
@@ -258,6 +307,7 @@ class PillboxBinding:
             "previewGoalDoseIndex": "0", "previewGoalLatestTime": "1439",
         }
         inputs.update(request.metadata)
+        # The twin's state is passed to the coordinator under `preview*` names
         names = {"time_consumption": "previewTime_consumption", "drugIndex": "previewDrugIndex",
                  "scheduleVersion": "previewScheduleVersion", "lastAppliedCommandId": "previewLastAppliedCommandId",
                  "lastRejectedCommandId": "previewLastRejectedCommandId"}
@@ -265,6 +315,7 @@ class PillboxBinding:
             name = key.split("(")[0]
             if name in names:
                 inputs[names[name] + key[len(name):]] = value
+        # Phases follow the order in which PreviewOrchestrator calls them
         if phase == "begin":
             inputs["previewBegin"] = "true"
             for compartment, row in self.config["preview_min_gap"].items():
@@ -290,6 +341,7 @@ class PillboxBinding:
         return inputs
 
     def preview_output(self, state: AsmState) -> PreviewResult:
+        # Anything but a completed, well-formed verdict is an operational error, not a verdict
         if not state.boolean("previewCompleted") or state.boolean("previewTimedOut"):
             raise AsmError("No completed ASM preview result")
         outcome = state.literal("previewOutcome")

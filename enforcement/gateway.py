@@ -1,4 +1,19 @@
-"""Agent-facing application service: validation, orchestration and acknowledged commit."""
+"""Agent-facing application service: validation, orchestration and acknowledged commit.
+
+`EnforcementGateway.submit_plan` is the heart of the framework. For every plan it runs this
+pipeline, each step correlated by one `command_id`:
+
+    1. validate the plan (pydantic schema + the binding's `validate_plan`);
+    2. snapshot the live device and ask the ENFORCER ASM for a decision on the first action;
+    3. if the enforcer asks for a preview, simulate the whole plan on a replayed twin and
+       feed the verdict back to the enforcer;
+    4. if the enforcer authorizes a command, re-check that the live state did not change,
+       send the command to the live device and verify the ACK (applied or rejected);
+    5. cross-check decision and ACK, and return the result to the MCP facade.
+
+The gateway never decides anything about safety: it only moves data between ASM sessions
+(through the use case's `ModelBinding`) and refuses to continue on any inconsistency.
+"""
 
 from copy import deepcopy
 from dataclasses import asdict
@@ -10,20 +25,33 @@ from .preview_orchestrator import PreviewOrchestrator
 logger = logging.getLogger(__name__)
 
 class EnforcementGateway:
+    """Owns the long-lived ASM sessions (live device, enforcer, setup models) and serializes
+    every plan under one lock, so that two plans can never interleave on the live system."""
+
     def __init__(self, runtime: ASMRuntimeAdapter, binding: ModelBinding):
         self.runtime = runtime
         self.binding = binding
         self.preview = PreviewOrchestrator(runtime, binding)
         self.lock = RLock()
-        self.live = None
-        self.enforcer = None
-        self.setup_sessions = []
-        self.last_live = None
+        self.live = None  # session of the live device model
+        self.enforcer = None  # session of the enforcer model (takes every decision)
+        self.setup_sessions = []  # optional models kept in sync after each applied command
+        self.last_live = None  # last state read from the live device
+        # Idempotency log: request_id -> {payload, status, result}. It also backs get_plan_status.
         self.records: dict[str, dict] = {}
+        # Correlation id of the next request. It is sent to the ASM and must come back unchanged
+        # in the enforcer output, in the command and in the ACK.
         self.next_command_id = 101
+        # Set after any operational error: the gateway then refuses every further write
+        # (fail-closed) until the MCP server is restarted.
         self.failed = False
 
     def initialize(self) -> None:
+        """Starts the live device, the setup models and the enforcer with their first step.
+
+        Called once at startup: if AsmetaS is unreachable or a model fails, the exception
+        propagates and the MCP server exits, so the chat never starts (fail-fast).
+        """
         with self.lock:
             if self.failed:
                 raise AsmError("Gateway requires operator recovery")
@@ -44,18 +72,21 @@ class EnforcementGateway:
                 raise
 
     def _ready(self) -> None:
+        """Guard for every operation: the gateway must be initialized and not in recovery."""
         if self.failed:
             raise AsmError("Gateway requires operator recovery; further writes are disabled")
         if self.live is None or self.enforcer is None:
             raise AsmError("Call initialize() first")
 
     def get_system_state(self) -> dict:
+        """Read-only: rereads the live device and returns the binding's summary of it."""
         with self.lock:
             self._ready()
             self.last_live = self.runtime.read(self.live)
             return self.binding.summary(self.last_live)
 
     def get_plan_status(self, request_id: str) -> dict:
+        """Read-only: result of an earlier submission, looked up by request_id."""
         with self.lock:
             record = self.records.get(request_id)
             if record is None:
@@ -64,6 +95,14 @@ class EnforcementGateway:
                              "status": record["status"], "result": record["result"]})
 
     def submit_plan(self, submission: Plan | dict) -> dict:
+        """Verifies and executes the FIRST action of the plan; returns a JSON-serializable result.
+
+        Errors raised before the ASM models run (pydantic, `validate_plan`) propagate as
+        ValueError: nothing changed and the facade reports `invalid_request`. Errors after
+        that point are operational failures and put the gateway in recovery mode.
+        The returned dict has `status` = `completed` (the ASM gave a decision, which may
+        well be a refusal) or `recovery_required` (operational failure).
+        """
         plan = Plan.model_validate(submission)
         self.binding.validate_plan(plan)
         payload = plan.model_dump(mode="json")
@@ -85,6 +124,8 @@ class EnforcementGateway:
             commit_rejected = False
             applied_action = None
             try:
+                # STEP 1 - Ask the enforcer. The snapshot (state + input history of the live
+                # device) is what the preview later replays and what every re-check compares to.
                 snapshot = self.runtime.snapshot(self.live)
                 self.last_live = snapshot.state
                 inputs = self.binding.enforcer_inputs(snapshot.state, plan, command_id)
@@ -93,6 +134,9 @@ class EnforcementGateway:
                 if output.request_id != command_id:
                     raise AsmError("Enforcer response belongs to another request")
 
+                # STEP 2 - Preview (only if the enforcer asked for it). The whole plan is
+                # simulated on a twin, never on the live system; the verdict goes back to the
+                # enforcer, which then gives the final decision.
                 preview_request = output.preview_request
                 if preview_request is not None:
                     if preview_request.request_id != command_id:
@@ -110,6 +154,9 @@ class EnforcementGateway:
                     state = self.runtime.step(self.enforcer, inputs)
                     output = self.binding.enforcer_output(state)
 
+                # STEP 3 - Commit (only if the enforcer authorized a command). Before sending
+                # it, every correlation is checked and the live state is verified unchanged:
+                # the command must be exactly what the ASM evaluated, on the state it evaluated.
                 command = output.command
                 if command is not None:
                     if command.command_id != command_id:
@@ -129,7 +176,9 @@ class EnforcementGateway:
 
                     record["status"] = "committing"
                     inputs = self.binding.command_inputs(self.last_live, command)
-                    commit_started = True
+                    commit_started = True  # from here on a failure leaves the outcome "unknown"
+                    # The live step is the only write to the real system. The ACK is read from
+                    # the new live state, then mirrored to the enforcer (final decision).
                     self.last_live = self.runtime.step(self.live, inputs)
                     commit_applied = self.binding.commit_applied(self.last_live, command)
                     commit_rejected = self.binding.commit_rejected(self.last_live, command)
@@ -142,6 +191,8 @@ class EnforcementGateway:
                     elif not commit_rejected:
                         raise AsmError("No matching live execution acknowledgment")
 
+                # STEP 4 - Final cross-checks: the decision must match what really happened
+                # on the live system (ALLOW/REPLACE <=> command acknowledged as applied).
                 if output.request_id != command_id:
                     raise AsmError("Final decision belongs to another request")
                 if output.decision not in DECISION_VERDICTS:
@@ -186,6 +237,7 @@ class EnforcementGateway:
             return result
 
     def _reason_explanation(self, reason: str) -> dict:
+        """`reason_explanation` field: the use case's plain-language meaning of the reason code."""
         explanation = self.binding.reason_glossary().get(reason)
         return {"reason_explanation": explanation} if explanation else {}
 
@@ -198,6 +250,7 @@ class EnforcementGateway:
             return None
 
     def close(self) -> None:
+        """Stops every ASM session opened by this gateway (called on regular server exit)."""
         with self.lock:
             self.runtime.close()
             self.live = None

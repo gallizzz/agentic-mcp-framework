@@ -1,10 +1,14 @@
 """LLM Planner Node for LangGraph.
 
 LangGraph planner node for LLM reasoning and candidate action proposal.
+
+The planner is the only component that talks to the LLM. It never executes tools: it only
+emits tool calls, which the router sends to the Formal Gate. When the turn must end (step
+limit reached, or the gate BLOCKED the action) the LLM is called with tools disabled so it can
+only write the final answer. The system prompt is generic; domain text comes from `hints`.
 """
 
 from __future__ import annotations
-import os
 from typing import Any, Dict, List
 from langchain_core.messages import AIMessage, AnyMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_core.tools import BaseTool
@@ -35,6 +39,7 @@ def create_planner_router(max_steps: int):
     """Routes tool calls to formal_gate, or terminates the turn if no tools were called."""
 
     def planner_router(state: AgentState) -> str:
+        # No tool call = the planner wrote its answer: the turn is over
         if not getattr(state["messages"][-1], "tool_calls", None):
             return END
         # Fail-closed: after a blocking verdict no further action reaches the gate
@@ -110,12 +115,15 @@ class PlannerNode:
 
     def __init__(self, llm: Any, tools: List[BaseTool], max_steps: int, hints: str):
         self.max_steps = max_steps
-        self.system_prompt = os.getenv("SYSTEM_PROMPT") or build_default_system_prompt(tools, hints)
+        # Generic prompt + the tool list discovered via MCP + the use case's hints
+        self.system_prompt = build_default_system_prompt(tools, hints)
         self.llm_with_tools = llm.bind_tools(tools)
         # Same tool schemas (the history contains tool calls), but calling them is forbidden
         self.llm_final = llm.bind_tools(tools, tool_choice="none")
 
     async def __call__(self, state: AgentState) -> Dict[str, Any]:
+        """One LLM call. Normal case: tools enabled. Final-answer case (BLOCKED or step limit):
+        tools disabled, so the user always gets an explanation instead of a silent stop."""
         steps = state["planner_steps"]
         out_of_steps = steps >= self.max_steps
         messages = [SystemMessage(content=self.system_prompt)] + _answer_pending_tool_calls(state["messages"])

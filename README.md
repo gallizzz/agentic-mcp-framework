@@ -129,7 +129,6 @@ Credenziali, parametri di connessione e selezione del caso di studio:
 | `GEMINI_MODEL` | `gemini-flash-lite-latest` | Modello LLM per il Planner (consigliato per evitare rate limit). |
 | `ASMETAS_URL` | `http://localhost:8080` | URL del backend REST del simulatore AsmetaS. |
 | `USE_CASE` | *(obbligatoria)* | Caso di studio da caricare da `use_cases/<nome>/config.py` (es. `pillbox`). Se manca, l'agente non parte. |
-| `SYSTEM_PROMPT` | *(generato)* | Sovrascrive il system prompt del Planner. |
 
 ### Configurazione del Caso di Studio (`use_cases/<nome>/config.py`)
 Ogni caso di studio definisce `USE_CASE = UseCaseConfig(...)` con:

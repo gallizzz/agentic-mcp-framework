@@ -1,4 +1,11 @@
-"""Session lifecycle and verified deterministic replay for isolated previews."""
+"""Session lifecycle and verified deterministic replay for isolated previews.
+
+AsmetaS-web-service has no "clone session" operation. To simulate a plan without touching the
+live system, this module records every input ever sent to a session (`Session.history`) and
+rebuilds an identical twin by replaying that history on a fresh session, then checks that the
+twin's full state equals the live one. This works only if the ASM models are deterministic.
+It also refuses to run if the local `.asm` files changed after startup.
+"""
 
 from copy import deepcopy
 from dataclasses import dataclass, field
@@ -10,6 +17,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class Session:
+    """One running ASM model: service session id, model file, inputs sent so far, last state."""
     id: int
     model_name: str
     history: list[dict[str, str]] = field(default_factory=list)
@@ -17,12 +25,19 @@ class Session:
 
 @dataclass
 class Snapshot:
+    """Everything needed to rebuild a session elsewhere: model, input history and expected state."""
     model_name: str
     history: list[dict[str, str]]
     state: AsmState
     sources_hash: str
 
 class ASMRuntimeAdapter:
+    """Thin layer over the REST client that tracks sessions and their input history.
+
+    Every session opened through it is registered, so `close()` can stop them all;
+    models are accepted only if they are files of the trusted local bundle.
+    """
+
     def __init__(self, service: AsmService, models_folder: Path, max_replay_steps: int = 1000):
         self.service = service
         self.models_folder = models_folder
@@ -31,6 +46,7 @@ class ASMRuntimeAdapter:
         self.sessions: dict[int, Session] = {}
 
     def _hash_sources(self) -> str:
+        """Fingerprint of the local .asm files (names and contents)."""
         digest = hashlib.sha256()
         for path in sorted(self.models_folder.glob("*.asm")):
             digest.update(path.name.encode())
@@ -38,6 +54,7 @@ class ASMRuntimeAdapter:
         return digest.hexdigest()
 
     def create(self, model_name: str) -> Session:
+        """Starts a new session of a model of the trusted bundle (no paths, no changed sources)."""
         if Path(model_name).name != model_name or not (self.models_folder / model_name).is_file():
             raise AsmError("Model is not in the trusted local bundle")
         if self._hash_sources() != self.sources_hash:
@@ -49,10 +66,12 @@ class ASMRuntimeAdapter:
         return session
 
     def _check_session(self, session: Session) -> None:
+        """Rejects sessions not opened by this adapter or already closed."""
         if self.sessions.get(session.id) is not session:
             raise AsmError("Unknown or closed ASM session")
 
     def step(self, session: Session, inputs: dict[str, str]) -> AsmState:
+        """Runs one step and records the inputs, so the session can be replayed later."""
         self._check_session(session)
         state = self.service.step(session.id, inputs)
         session.history.append(dict(inputs))
@@ -60,12 +79,14 @@ class ASMRuntimeAdapter:
         return state
 
     def read(self, session: Session) -> AsmState:
+        """Reads the current state without stepping the model."""
         self._check_session(session)
         state = self.service.read(session.id)
         session.state = deepcopy(state)
         return state
 
     def snapshot(self, session: Session) -> Snapshot:
+        """Captures history and freshly read state of a session (input of `replay`)."""
         return Snapshot(session.model_name, deepcopy(session.history),
                         deepcopy(self.read(session)), self.sources_hash)
 
@@ -91,11 +112,13 @@ class ASMRuntimeAdapter:
             raise
 
     def stop(self, session: Session) -> None:
+        """Stops one session on the service and forgets it."""
         if session.id in self.sessions:
             self.service.stop(session.id)
             del self.sessions[session.id]
 
     def close(self) -> None:
+        """Stops all sessions of this adapter, logging (not raising) cleanup errors."""
         for session in list(self.sessions.values()):
             try:
                 self.stop(session)

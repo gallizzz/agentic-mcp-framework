@@ -2,6 +2,13 @@
 
 A use case supplies its ModelBinding factory and its configuration file, whose
 "asmeta" section lists the models and libraries to upload (paths relative to the file).
+
+Typical use, in `use_cases/<name>/mcp_server.py`:
+
+    raise SystemExit(run_mcp_server(MyBinding, Path(__file__).with_name("enforcement.json")))
+
+The binding factory receives the path of the configuration file, so the binding can read
+its own trusted parameters from the same JSON (any keys besides "asmeta" are the use case's).
 """
 
 import argparse
@@ -23,11 +30,13 @@ from .gateway import EnforcementGateway
 from .mcp_facade import serve
 from .rest_client import AsmetaRestClient
 
+# Builds the use case's ModelBinding from the path of its configuration file
 BindingFactory = Callable[[Path], ModelBinding]
 
 
 def _asmeta_section(config: Path) -> tuple[Path, list[Path], list[Path]]:
-    """Models folder, model files and library files of the configuration."""
+    """Models folder, model files and library files of the configuration (paths resolved
+    relative to the configuration file)."""
     section = json.loads(config.read_text(encoding="utf-8"))["asmeta"]
     base = config.resolve().parent
     models_dir = (base / section["models_path"]).resolve()
@@ -47,7 +56,10 @@ def _deploy_models(client: AsmetaRestClient, config: Path,
 @contextmanager
 def _running_gateway(client: AsmetaRestClient, make_binding: BindingFactory,
                      config: Path) -> Iterator[EnforcementGateway]:
-    """Uploads the models and yields an initialized gateway, closing it on exit."""
+    """Uploads the models and yields an initialized gateway, closing it on exit.
+
+    Any failure here (service offline, model not loadable) aborts startup: this is the
+    blocking availability check required by the fail-fast rule."""
     _deploy_models(client, config)
     models_dir, _, _ = _asmeta_section(config)
     gateway = EnforcementGateway(ASMRuntimeAdapter(client, models_dir), make_binding(config))
@@ -65,6 +77,7 @@ def _base_parser(description: str, default_config: Path) -> argparse.ArgumentPar
 
 
 def _client() -> AsmetaRestClient:
+    """REST client for the URL in ASMETAS_URL (passed by the agent, see `_build_mcp_config`)."""
     return AsmetaRestClient(os.getenv("ASMETAS_URL", DEFAULT_URL))
 
 
