@@ -198,7 +198,9 @@ sperimentale](#caso-di-studio-e-validazione-sperimentale)
 
 [6.3 Scenari sperimentali[]{.mark}](#scenari-sperimentali) []{.mark}
 
-[6.4 Risultati[]{.mark}](#risultati) []{.mark}
+[6.4 Scelta del modello linguistico[]{.mark}](#scelta-del-modello-linguistico) []{.mark}
+
+[6.5 Risultati[]{.mark}](#risultati) []{.mark}
 
 [7. Conclusioni e sviluppi futuri](#conclusioni-e-sviluppi-futuri)
 
@@ -864,8 +866,9 @@ interfaccia con l\'ambiente fisico (eseguiti come processi isolati
 out-of-process):]{.mark}
 
 - [Cloud-to-Host Layer (HTTPS/REST): Il nodo proponente (PlannerNode),
-  basato sul modello di linguaggio Google Gemini (nello specifico il
-  modello gemini-flash-lite), comunica con le API cloud per la
+  basato sul modello di linguaggio Google Gemini (il cui nome è
+  indicato dalla variabile d\'ambiente GEMINI_MODEL, ad esempio
+  gemini-3.5-flash-lite), comunica con le API cloud per la
   generazione del ragionamento e delle proposte d\'azione tramite
   chiamate HTTP/REST]{.mark}.[]{.mark}
 
@@ -922,7 +925,9 @@ un flusso in tre fasi distinte:]{.mark}
 
 - [Inizializzazione della Sessione e Discovery MCP: All\'avvio
   dell\'applicazione, l\'host carica la configurazione del caso di
-  studio indicato dalla variabile d\'ambiente USE_CASE e avvia il
+  studio indicato dalla variabile d\'ambiente USE_CASE (così come
+  GEMINI_API_KEY, GEMINI_MODEL e ASMETAS_URL, anch\'esse obbligatorie e
+  prive di valore predefinito) e avvia il
   relativo server MCP come sottoprocesso stdio. Prima di servire
   richieste, il server carica i modelli ASM su AsmetaS, avvia le
   sessioni e inizializza il gateway di enforcement. L\'host interroga
@@ -1398,10 +1403,39 @@ permette esperimenti controllati sul solo framework di enforcement,
 separando il comportamento dei modelli ASM da quello del modello
 linguistico.]{.mark}
 
-## 6.4 Risultati[]{.mark}
+## 6.4 Scelta del modello linguistico[]{.mark}
+
+[Per il Planner è stato usato gemini-3.5-flash-lite, appartenente alla
+famiglia Gemini di Google e raggiunto tramite API. La scelta di un
+modello della fascia leggera è coerente con il principio del pattern: la
+sicurezza non dipende dall\'affidabilità dell\'LLM, perché ogni azione
+attuativa è comunque decisa dai modelli ASM. Un errore del Planner (un
+parametro sbagliato, un piano malformato, una proposta non sicura) viene
+respinto dallo schema Pydantic o dall\'enforcer e non raggiunge il
+sistema; l\'LLM influisce quindi sulla qualità dell\'interazione, non
+sulla correttezza dell\'esito. Per questo non serve il modello più
+capace disponibile, mentre contano la bassa latenza, che si somma a ogni
+passo del turno (lettura dello stato e invio del piano), e il costo
+contenuto per chiamata.]{.mark}
+
+[I requisiti effettivi sul modello sono due: supportare il function
+calling, poiché il Planner riceve i tool soltanto da questo canale e non
+dal prompt di sistema, e produrre argomenti conformi allo schema di
+submit_plan. Entrambi sono verificati dalle prove della sezione
+6.5.]{.mark}
+
+[Il modello non è cablato nel codice: il nome è letto dalla variabile
+d\'ambiente GEMINI_MODEL, obbligatoria e senza valore predefinito, e può
+essere sostituito senza modificare il motore, in linea con
+l\'indipendenza dal modello linguistico indicata nelle conclusioni.
+Nelle prove precedenti era stato usato gemini-flash-lite-latest, un
+alias che punta alla versione corrente del modello; il passaggio a un
+identificativo esplicito rende le esecuzioni riproducibili nel tempo.]{.mark}
+
+## 6.5 Risultati[]{.mark}
 
 [Gli scenari sono stati eseguiti sia con l\'esecutore senza LLM sia in
-chat, con il Planner basato su gemini-flash-lite-latest, ottenendo in
+chat, con il Planner basato su gemini-3.5-flash-lite, ottenendo in
 tutti i casi l\'esito atteso.]{.mark}
 
 - [M1: l\'orario richiesto (1050) dista solo 90 minuti dalla dose delle
@@ -1415,29 +1449,46 @@ tutti i casi l\'esito atteso.]{.mark}
   la seconda azione porta a \[1020, 1100\], con una distanza di 80
   minuti. Il coordinatore restituisce CONFLICT e la decisione è REPLAN
   con motivo PREVIEW_CONFLICT_REASON: sul sistema reale non viene
-  scritto nulla e il Planner chiede all\'utente come procedere.]{.mark}
+  scritto nulla e il Planner, senza reinviare la sola prima azione per
+  farla passare, chiede all\'utente come procedere.]{.mark}
 
 - [M2-B: lo stato finale \[1020, 1140\] sarebbe sicuro, ma quello
   intermedio \[1020, 1100\] non lo è. Il coordinatore mantiene
   registrata la violazione e il piano viene rifiutato senza modifiche,
   dimostrando che la verifica riguarda l\'intera sequenza e non solo lo
-  stato finale.]{.mark}
+  stato finale. Il Planner mantiene le tre azioni nello stesso invio e
+  spiega che applicarne solo una parte non soddisferebbe la richiesta.
+  Con la formulazione \"riportalo alle 19:00\" il Planner ha invece
+  riferito l\'ultima azione una volta alla prima dose e una volta alla
+  seconda: il riferimento ambiguo produce piani diversi, ma ciascuno
+  viene comunque verificato dagli ASM.]{.mark}
 
 - [M2-C: la correzione 1020 e la seconda azione portano a \[1020,
   1160\], con 140 minuti di distanza: la preview è COMPATIBLE e viene
   eseguita la sola prima azione. Il Planner rilegge lo stato
   (versione 1) e invia la seconda azione, che è già ammissibile e viene
-  eseguita senza preview (ALLOW).]{.mark}
+  eseguita senza preview (ALLOW). Il Planner omette i goals nel secondo
+  invio, perché l\'utente li aveva espressi solo per la prima
+  azione.]{.mark}
 
 [Altre prove in chat hanno verificato il comportamento in situazioni non
 coperte dagli scenari:]{.mark}
 
-- [la richiesta di spostare il fosamax alle 08:00 viene corretta alle
+- [la richiesta di spostare il fosamax alle 10:00 viene corretta alle
   06:10 (370), poiché tra farmaci diversi servono 360 minuti e la dose
-  di sumatriptan è alle 12:10. In una delle prove il primo invio
-  conteneva un campo goals nullo: lo schema Pydantic lo ha respinto
-  prima che raggiungesse gli ASM e il Planner lo ha corretto al
-  tentativo successivo;]{.mark}
+  di sumatriptan è alle 12:10; dopo quella delle 19:00 non c\'è spazio
+  per un orario più vicino. Il Planner omette i goals già al primo
+  invio, e la richiesta si completa in un unico invio;]{.mark}
+
+- [la richiesta di spostare il sumatriptan alle 17:30 senza indicare
+  alcuna disponibilità produce lo stesso esito di M1 (REPLACE a 1020). Il
+  Planner invia goals vuoti, che lo schema accetta senza alterare il
+  risultato;]{.mark}
+
+- [una richiesta non esprimibile con le azioni ammesse (saltare la
+  prossima dose di fosamax) non genera alcun invio: il Planner legge lo
+  stato, spiega che il sistema consente solo di riprogrammare la dose a
+  un nuovo orario e lascia il sistema invariato;]{.mark}
 
 - [una finestra impossibile (disponibilità dalle 20:00 con scadenza alle
   15:00) produce BLOCK con motivo INVALID_WINDOW e il Planner si limita
