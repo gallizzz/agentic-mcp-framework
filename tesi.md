@@ -372,6 +372,10 @@ guardie e invarianti di sicurezza, abilitando l\'esecuzione solo in
 presenza di un verdetto formale positivo e guidando cicli controllati di
 auto-correzione in caso di violazione.[]{.mark}
 
+L\'implementazione del pattern, comprensiva del motore di orchestrazione,
+del framework di enforcement e del caso di studio, è contenuta in un
+repository GitHub privato \[18\], a cui ha accesso la relatrice.
+
 # 2. Nozioni di background
 
 ## 2.1 Paradigma ReAct
@@ -1281,6 +1285,12 @@ concordare: ogni discrepanza è trattata come errore operativo.]{.mark}
 
 # [6.]{.mark} Caso di studio e validazione sperimentale
 
+Il codice, i modelli ASM e gli scenari descritti in questo capitolo
+(M1, M2-A, M2-B e M2-C) sono contenuti nel repository del progetto
+\[18\], nelle cartelle use_cases/pillbox e resources. Gli scenari possono
+essere rieseguiti senza LLM tramite l\'esecutore di scenari JSON
+descritto nella sezione 6.3.
+
 ## 6.1 Sistema pillbox[]{.mark}
 
 [Il caso di studio di riferimento è un portapillole (pillbox) simulato,
@@ -1611,3 +1621,8 @@ IEEE, 2025.
 \[17\] Liu, Yue, et al. \"Agent design pattern catalogue: A collection
 of architectural patterns for foundation model based agents.\" *Journal
 of Systems and Software* 220 (2025): 112278.
+
+\[18\] Gallizioli, Lorenzo. \"agentic-mcp-framework: runtime enforcement
+delle azioni di agenti LLM mediante Abstract State Machines.\" Repository
+GitHub privato, accessibile alla relatrice, 2026. URL:
+https://github.com/gallizzz/agentic-mcp-framework.
