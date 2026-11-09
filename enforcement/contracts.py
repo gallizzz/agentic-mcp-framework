@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 import json
 import re
 from typing import Any, Protocol
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 # ============================================================================
 # CONTRACT WITH THE AGENT'S FORMAL GATE (core/ imports only this file)
@@ -62,6 +62,12 @@ class Plan(BaseModel):
     expected_version: int = Field(ge=0)
     actions: list[Action] = Field(min_length=1, max_length=32)
     goals: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("goals", mode="before")
+    @classmethod
+    def _null_goals_are_empty(cls, value: Any) -> Any:
+        """LLMs often send `null` or "" for an omitted optional field: it means no constraints."""
+        return {} if value is None or value == "" else value
 
 # ============================================================================
 # ASM STATE AND PROTOCOL OBJECTS
