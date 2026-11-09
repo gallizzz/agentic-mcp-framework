@@ -98,8 +98,10 @@ def run_mcp_server(make_binding: BindingFactory, default_config: Path) -> int:
     client = None
     try:
         client = _client()  # fails here if ASMETAS_URL is not set
+        # Startup order: upload models -> start live/enforcer sessions (gateway.initialize)
+        # -> only then serve MCP. Any failure before `serve` exits the process (fail-fast).
         with _running_gateway(client, make_binding, args.config) as gateway:
-            serve(gateway)
+            serve(gateway)  # blocks until the agent disconnects; sessions are closed afterwards
         return 0
     except (ValueError, RuntimeError, OSError) as exc:
         logging.error("%s", exc)

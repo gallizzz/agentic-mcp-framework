@@ -13,6 +13,16 @@ Graph, for each message:
 The planner (LLM) proposes tool calls; the formal gate runs read-only tools directly and
 sends `submit_plan` to the use-case MCP server, which verifies it with the ASM models.
 Nothing in this file knows any domain: it all comes from `UseCaseConfig`.
+
+END-TO-END FLOW OF A WRITE:
+    planner (LLM) proposes `submit_plan`          core/planner_node.py
+      -> formal gate sends it over MCP stdio      core/formal_gate_node.py
+      -> MCP server tool `submit_plan`            enforcement/mcp_facade.py
+      -> gateway: enforcer ASM decides,           enforcement/gateway.py
+         preview on a twin if requested,          enforcement/preview_orchestrator.py
+         commit on the live system + ACK          enforcement/asm_runtime.py (sessions)
+      -> decision (ALLOW/REPLACE/REPLAN/BLOCK) travels back up to the planner, which
+         writes the final answer. Startup of the server side: enforcement/bootstrap.py.
 """
 
 from contextlib import asynccontextmanager

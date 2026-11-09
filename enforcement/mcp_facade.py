@@ -9,6 +9,9 @@ Tools exposed (names are fixed by `contracts`, the same for every use case):
     submit_plan       the ONLY tool that changes the system. Its description is assembled from
                       SUBMIT_DESCRIPTION (generic) + `binding.plan_description()` (domain).
 Every other tool added here would be blocked by the Formal Gate unless it is read-only.
+
+Flow: Formal Gate (core/) --MCP stdio--> a tool below --> `EnforcementGateway` method
+(enforcement/gateway.py) --> result dict back to the Formal Gate.
 """
 
 import asyncio
