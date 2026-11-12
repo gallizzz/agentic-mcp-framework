@@ -871,7 +871,18 @@ nel diagramma dei componenti in Figura 3.]{.mark}
 
 [Il PlannerNode rappresenta la componente neurale dell\'agente che
 gestisce l\'interazione diretta con l\'operatore umano, garantisce la
-continuità del contesto e formula le proposte d\'azione.]{.mark}
+continuità del contesto e formula le proposte d\'azione. È l\'unico nodo
+del grafo che comunica con l\'LLM, ma non esegue mai alcun tool: si
+limita a produrre richieste di esecuzione, che l\'instradamento consegna
+al FormalGateNode.]{.mark}
+
+[Poiché il nodo non contiene logica di dominio e non decide nulla
+sull\'esecuzione delle azioni, l\'unico strumento con cui orientare il
+comportamento del modello è il contesto che gli viene fornito: il prompt
+di sistema, le descrizioni dei tool e i risultati del Formal Gate. La
+progettazione del prompt è quindi la parte centrale del nodo, e ne
+determina la qualità dell\'interazione, mentre la correttezza delle
+azioni resta garantita dagli ASM.]{.mark}
 
 [Il prompt di sistema è composto da due parti. La prima è un testo
 generico, contenuto nel file core/planner_prompt.md, che non fa
@@ -939,12 +950,6 @@ validazione; dopo un BLOCK chiede di spiegare il motivo e che cosa
 l\'utente potrebbe cambiare nella richiesta. In questo modo
 l\'istruzione arriva insieme al caso a cui si applica, senza appesantire
 il prompt con regole che valgono solo in situazioni particolari.]{.mark}
-
-[Quando il turno deve terminare, dopo un BLOCK o al raggiungimento del
-numero massimo di passi, il nodo invoca l\'LLM con i tool disabilitati
-(tool_choice=\"none\"), così che l\'utente riceva sempre una spiegazione;
-se il modello restituisce comunque una chiamata a tool o una risposta
-vuota, all\'utente viene mostrato un avviso fisso.]{.mark}
 
 [Il prompt è stato sviluppato in modo iterativo, guidato dagli scenari.
 Per ogni scenario (M1, M2-A, M2-B, M2-C e le prove aggiuntive descritte
