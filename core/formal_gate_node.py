@@ -28,9 +28,20 @@ from enforcement.contracts import FINAL_DECISIONS, SUBMIT_ARGUMENT, SUBMIT_TOOL
 # Async callable (tool args) -> (is_error, raw text result) bound to the MCP session
 SubmitCallable = Callable[[Dict[str, Any]], Awaitable[Tuple[bool, str]]]
 
+# Fixed texts added to the tool results the Planner reads. A notice opens the result and states the
+# verdict; an instruction follows the reason and tells the LLM what to do next.
 ALLOW_NOTICE = "[FORMAL GATE: ALLOW] Action verified and executed exactly as proposed."
 REPLAN_NOTICE = "[FORMAL GATE: REPLAN] No change was applied."
 BLOCK_NOTICE = "[FORMAL GATE: BLOCK] Action blocked by the formal enforcer."
+REJECTED_PLAN_INSTRUCTION = (
+    "INSTRUCTION: if only the format is wrong, fix it and resend the same plan, keeping every action "
+    "and every constraint the user gave: never drop or empty them to pass validation. If the request "
+    "itself cannot be carried out, do not change it: explain why to the user."
+)
+BLOCK_INSTRUCTION = (
+    "INSTRUCTION FOR THE FINAL ANSWER: explain the reason to the user and what they could change "
+    "in the request."
+)
 
 # What an operational failure did to the live system (the turn ends right after it)
 COMMIT_OUTCOME_NOTICES = {
@@ -211,7 +222,7 @@ class FormalGateNode:
             # Rejected before reaching the ASM models (schema or binding validation)
             reason = result.get("reason") or raw
             return self._submit_result(
-                "REPLAN", f"Request rejected before the ASM models: {reason}",
+                "REPLAN", f"Request rejected before the ASM models: {reason}\n{REJECTED_PLAN_INSTRUCTION}",
                 submitted, result, tool_call_id,
             )
         if result.get("status") != "completed":
@@ -259,7 +270,7 @@ class FormalGateNode:
         elif verdict == "REPLAN":
             content = f"{REPLAN_NOTICE} Reason: {feedback}\n{result_text}"
         else:
-            content = f"{BLOCK_NOTICE} Reason: {feedback}\n{result_text}"
+            content = f"{BLOCK_NOTICE} Reason: {feedback}\n{result_text}\n\n{BLOCK_INSTRUCTION}"
 
         return _gate_result(
             verdict, shown_feedback,

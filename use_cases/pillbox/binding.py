@@ -83,10 +83,9 @@ REASON_GLOSSARY = {
     "STALE_STATE": "The version sent is not the current one, or the state changed during verification. "
                    "Reread the state and try again.",
     "NO_LOCAL_REPAIR": "No allowed time satisfies both the request and the `goals` sent (availability and deadline).",
-    "PREVIEW_CONFLICT_REASON": "The correction would be allowed, but the rest of the plan would lead to a conflict "
-                               "between doses. The complete plan cannot be carried out: do NOT resend only part of it "
-                               "(for example by dropping the remaining actions) to get the first action applied. "
-                               "Propose a complete alternative plan to the user or ask them how to proceed.",
+    "PREVIEW_CONFLICT_REASON": "The first action would be allowed, but the rest of the plan would lead to a conflict "
+                               "between doses, so the complete plan cannot be carried out. Applying only part of it "
+                               "would not carry out the user's request.",
     "PREVIEW_UNAVAILABLE": "The simulation of the plan gave no conclusive outcome.",
     "INVALID_WINDOW": "The constraints given are inconsistent (e.g. availability after the deadline).",
     "INVALID_TARGET": "The dose indicated does not exist or has already passed.",
