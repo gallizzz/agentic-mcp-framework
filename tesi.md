@@ -780,6 +780,16 @@ mappare le richieste fornite dall'utente trasformandole in requisiti
 tecnici validi da passare al motore formale e di interpretare l'output
 dello stesso per renderlo comprensibile all'utente.
 
+Il prompt non dovrà essere considerato un meccanismo di sicurezza: un
+vincolo espresso solo in linguaggio naturale può essere ignorato dal
+modello, quindi la garanzia di correttezza resterà affidata al Formal
+Gate e ai modelli ASM. Al prompt spetterà il compito di ridurre gli
+errori che non compromettono la sicurezza ma l'efficacia dell'agente,
+come piani incompleti o resoconti non fedeli dell'esito della verifica.
+Per mantenere il motore indipendente dal dominio, le istruzioni saranno
+divise in una parte generica, valida per qualunque caso di studio, e in
+una parte di dominio fornita dal caso di studio stesso.
+
 ### 3.2.4 Sviluppo del grafo LangGraph
 
 La fase conclusiva realizza il nucleo architetturale del progetto,
@@ -861,16 +871,112 @@ nel diagramma dei componenti in Figura 3.]{.mark}
 
 [Il PlannerNode rappresenta la componente neurale dell\'agente che
 gestisce l\'interazione diretta con l\'operatore umano, garantisce la
-continuità del contesto e formula le proposte d\'azione. La
-determinazione del prompt di sistema non è codificata rigidamente, ma
-viene generata dinamicamente dal nodo stesso attraverso il metodo
-build_default_system_prompt(tools, hints) in modo che possa adattarsi al
-sistema in cui viene utilizzato. Il prompt descrive il significato dei
-marcatori con cui il Formal Gate comunica l\'esito della verifica e
-aggiunge le eventuali istruzioni di dominio (planner_hints) fornite dal
-caso di studio. Le azioni ammesse e il significato dei motivi di rifiuto
-non compaiono nel prompt, ma arrivano dalla descrizione del tool
-submit_plan e dai risultati del server.]{.mark}
+continuità del contesto e formula le proposte d\'azione.]{.mark}
+
+[Il prompt di sistema è composto da due parti. La prima è un testo
+generico, contenuto nel file core/planner_prompt.md, che non fa
+riferimento ad alcun dominio ed è uguale per ogni caso di studio. La
+seconda sono le istruzioni di dominio (planner_hints) fornite dal caso
+di studio, che il nodo aggiunge in coda sotto un\'intestazione dedicata.
+Il prompt non elenca i tool: l\'LLM ne riceve nomi, descrizioni e schemi
+dei parametri attraverso il meccanismo di binding dei tool di LangChain
+(bind_tools), a partire da quelli scoperti tramite MCP. Le azioni
+ammesse e il significato degli obiettivi arrivano quindi dalla
+descrizione di submit_plan, costruita dal binding del caso di studio, e
+il significato dei motivi di rifiuto dal campo reason_explanation dei
+risultati del server.]{.mark}
+
+[Il testo generico assegna all\'LLM il ruolo di assistente operativo di
+un sistema critico, le cui azioni sono controllate da un enforcer
+formale, e fissa alcune regole, ognuna delle quali previene un
+comportamento indesiderato del modello:]{.mark}
+
+1. [Uso dei soli tool: il modello agisce solo tramite i tool
+   disponibili, rispettandone gli schemi. Se una richiesta non è
+   esprimibile con essi, deve dichiararla non supportata invece di
+   sostituirla con un\'azione dall\'effetto diverso.]{.mark}
+
+2. [Lettura dello stato: prima di agire il modello legge lo stato con un
+   tool di sola lettura, perché le letture precedenti nella
+   conversazione potrebbero non essere più attuali. In questo modo il
+   piano parte dalla versione corrente dello stato e non viene
+   rifiutato perché obsoleto.]{.mark}
+
+3. [Piano completo: ogni risposta contiene al più una chiamata a tool,
+   ma tutte le azioni richieste vanno inserite, in ordine, in un unico
+   submit_plan; sarà il Formal Gate a indicare quali restano da
+   eseguire. La regola evita che il modello perda le azioni successive
+   alla prima o chieda di nuovo all\'utente dati già forniti.]{.mark}
+
+4. [Verdetti: ogni risultato inizia con il verdetto del Formal Gate, che
+   è l\'unica fonte da usare per descriverlo. La regola spiega il
+   significato di ALLOW, REPLACE, REPLAN e BLOCK e vieta di dedurre
+   interventi non riportati o di scrivere i marcatori nelle risposte.
+   Impedisce, per esempio, di presentare come riuscita un\'azione
+   sostituita, o di attribuire al gate un intervento quando l\'esito è
+   ALLOW ma lo stato risultante sembra al modello sfavorevole.]{.mark}
+
+5. [Motivi: un rifiuto va spiegato solo attraverso la sua
+   reason_explanation, con parole proprie, senza mostrare all\'utente
+   codici di motivo o nomi dei verdetti e senza aggiungere cause non
+   dichiarate. Le regole di sicurezza sono decise dagli ASM: il modello
+   non deve inventare limiti o vincoli.]{.mark}
+
+6. [Anti-loop: il modello non ripete un\'azione già eseguita nel turno e
+   riporta l\'esito reale anche quando il sistema era già nello stato
+   richiesto.]{.mark}
+
+[Il prompt si chiude chiedendo di rispondere nella lingua dell\'utente,
+in modo conciso e professionale. Le regole sono scritte in inglese,
+come le descrizioni dei tool e le istruzioni di dominio.]{.mark}
+
+[Alcune istruzioni non stanno nel prompt, ma vengono aggiunte dal Formal
+Gate al risultato del tool nel momento in cui servono. Quando un piano
+viene rifiutato prima di raggiungere gli ASM per un errore di schema o
+di binding, il risultato chiede di correggere solo il formato, senza
+eliminare azioni o vincoli indicati dall\'utente pur di superare la
+validazione; dopo un BLOCK chiede di spiegare il motivo e che cosa
+l\'utente potrebbe cambiare nella richiesta. In questo modo
+l\'istruzione arriva insieme al caso a cui si applica, senza appesantire
+il prompt con regole che valgono solo in situazioni particolari.]{.mark}
+
+[Quando il turno deve terminare, dopo un BLOCK o al raggiungimento del
+numero massimo di passi, il nodo invoca l\'LLM con i tool disabilitati
+(tool_choice=\"none\"), così che l\'utente riceva sempre una spiegazione;
+se il modello restituisce comunque una chiamata a tool o una risposta
+vuota, all\'utente viene mostrato un avviso fisso.]{.mark}
+
+[Il prompt è stato sviluppato in modo iterativo, guidato dagli scenari.
+Per ogni scenario (M1, M2-A, M2-B, M2-C e le prove aggiuntive descritte
+nella Sezione 6.5) l\'esito atteso era fissato in anticipo: la decisione
+del Formal Gate, le azioni eseguite sul sistema e ciò che il Planner
+deve riferire all\'utente. Lo scenario veniva eseguito in chat e, quando
+il comportamento del Planner si discostava da quello atteso, si
+individuava la causa e si interveniva sul livello più adatto: una regola
+del prompt generico se l\'errore non dipendeva dal dominio;
+un\'istruzione di dominio, la descrizione di submit_plan o la
+spiegazione di un codice di motivo se riguardava il caso di studio;
+un\'istruzione nel risultato del Formal Gate se riguardava una sola
+situazione. Dopo ogni modifica gli scenari venivano rieseguiti, per
+verificare che la correzione non alterasse i casi che già funzionavano.
+Per esempio, dopo un rifiuto con motivo PREVIEW_CONFLICT_REASON il
+Planner tendeva a reinviare solo la prima azione del piano pur di
+farla accettare. Il comportamento è stato corretto chiarendo, nella
+spiegazione del motivo, che un\'esecuzione parziale non soddisfa la
+richiesta dell\'utente e, nel prompt, che le azioni del piano non vanno
+mai eliminate.]{.mark}
+
+[Il metodo riprende l\'idea del test-driven development, in cui il
+comportamento atteso viene definito prima dell\'implementazione e ne
+guida le modifiche, ma non ne è un\'applicazione in senso stretto. Gli
+scenari sono test di accettazione eseguiti manualmente e non test
+automatici, e stabilire se la risposta del Planner è corretta richiede
+un giudizio umano. Inoltre l\'LLM non è deterministico: uno scenario
+superato una volta può dare un esito diverso in un\'esecuzione
+successiva, come mostra il caso di riferimento ambiguo in M2-B. Un
+esito positivo indica quindi che il prompt orienta il modello verso il
+comportamento voluto, non che questo sia garantito; la garanzia, per le
+azioni sul sistema, resta compito del Formal Gate.]{.mark}
 
 [Il flusso in uscita dal nodo è regolato dalla funzione di instradamento
 condizionale planner_router. Quest\'ultima ispeziona l\'output generato
@@ -1567,7 +1673,10 @@ spiegazione per l\'LLM.]{.mark}
 [Le istruzioni di dominio aggiunte al prompt del Planner si limitano a
 descrivere il sistema e il formato degli orari: l\'utente conosce solo i
 nomi dei farmaci, mentre scomparti e indici sono dettagli interni che
-l\'agente non deve esporre.]{.mark}
+l\'agente non deve esporre. Nei tool gli orari sono espressi in minuti
+dalla mezzanotte: per comunicarli all\'utente l\'agente non li converte
+da sé, ma li copia dal campo schedule_hhmm dello stato, già nel formato
+HH:MM.]{.mark}
 
 ## 6.3 Scenari sperimentali[]{.mark}
 
