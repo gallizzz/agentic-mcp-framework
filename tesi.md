@@ -1245,7 +1245,8 @@ correlazione tra richiesta, simulazione, comando e conferma.]{.mark}
 
 - [preview_orchestrator: simulazione della correzione e delle azioni
   residue del piano sul gemello, con invocazione del modello
-  coordinatore dopo ogni passo;]{.mark}
+  coordinatore dopo ogni passo, cioè la parte di orchestrazione del
+  protocollo PGA (sezione 5.6);]{.mark}
 
 - [gateway: flusso completo di una richiesta (enforcer, simulazione,
   commit sul sistema live, conferma);]{.mark}
@@ -1559,6 +1560,30 @@ la rende conflittuale. Infine, un esito compatibile non autorizza
 l\'esecuzione incondizionata del resto del piano: ogni azione successiva
 è a sua volta sottoposta a enforcement rispetto allo stato reale
 del]{.mark} [sistema, come avviene nello scenario M2-C.]{.mark}
+
+[Nella realizzazione del protocollo i compiti sono divisi tra i modelli
+ASM e il framework di enforcement. Ai modelli ASM spettano tutte le
+decisioni: l\'enforcer stabilisce se un\'azione è ammissibile, quale
+correzione prescrivere e se richiedere una preview; il coordinatore
+stabilisce, passo dopo passo, se lo stato simulato rispetta i vincoli e
+restituisce l\'esito COMPATIBLE, CONFLICT o UNKNOWN; l\'enforcer, letto
+questo esito, decide se emettere il comando e quale decisione finale
+restituire; il modello del sistema live conferma o rifiuta il comando
+ricevuto.]{.mark}
+
+[Al framework di enforcement, scritto in Python, spetta invece
+l\'orchestrazione dei passi del protocollo: ricostruire il gemello
+rigiocando la storia degli input del sistema live, eseguire sul gemello
+la correzione e le azioni residue, invocare il coordinatore dopo ogni
+passo, restituire l\'esito della preview all\'enforcer, verificare la
+correlazione e la versione dello stato prima del commit, applicare il
+comando al sistema live e attenderne la conferma. Il framework controlla
+inoltre che le uscite dei modelli siano coerenti tra loro, per esempio
+che l\'enforcer non emetta un comando dopo una preview non compatibile, e
+tratta ogni incoerenza come errore operativo. Il framework realizza
+quindi il protocollo PGA come sequenza di passi, ma non decide nessuno
+dei suoi esiti: per un nuovo dominio bastano modelli ASM diversi e il
+relativo binding, senza modifiche al framework.]{.mark}
 
 # [6.]{.mark} Caso di studio e validazione sperimentale
 
