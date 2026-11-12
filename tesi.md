@@ -57,7 +57,7 @@ sicurezza codificati nel modello ASM. Il Formal Gate realizza una
 verifica a runtime preventiva controllando l'azione candidata prima che
 venga eseguita e, se necessario, applicando una delle due politiche
 previste: lo shielding, che sostituisce l'azione non valida con la
-correzione ammissibile più vicina calcolata dal mdoello ASM, oppure il
+correzione ammissibile più vicina calcolata dal modello ASM, oppure il
 re-planning con invio all\'agente LLM di un feedback correttivo per
 riformulare la pianificazione dell\'azione.
 
@@ -91,7 +91,8 @@ ASMETA)]{.mark}](#dominio-deterministico-metodi-formali-e-asmeta)
 
 [2.3 Protocolli di interconnessione](#protocolli-di-interconnessione)
 
-[2.4 Valutazione e interoperabilità](#valutazione-e-interoperabilità)
+[2.4 Valutazione e sicurezza degli
+agenti](#valutazione-e-sicurezza-degli-agenti)
 
 [2.5 LLM Symbolic Reasoning](#llm-symbolic-reasoning)
 
@@ -106,15 +107,19 @@ sicurezza[]{.mark}](#agent-design-pattern-per-la-sicurezza) []{.mark}
 [[2.7.2 Cross-Reflection per il
 re-planning]{.mark}](#cross-reflection-per-il-re-planning) []{.mark}
 
-[[2.7.3 Agent adapter per l'interoperabilità
-(MCP)]{.mark}](#agent-adapter-per-linteroperabilità-mcp) []{.mark}
+[[2.7.3 Agent adapter per
+l'interoperabilità]{.mark}](#agent-adapter-per-linteroperabilità)
+[]{.mark}
+
+[2.8 Sistemi auto-adattativi e ciclo
+MAPE-K[]{.mark}](#sistemi-auto-adattativi-e-ciclo-mape-k) []{.mark}
 
 [3. Idea Progettuale](#idea-progettuale)
 
 [3.1 Obiettivi](#obiettivi)
 
-[3.1.1 Runtime Verification e I/O
-Sanitization](#runtime-verification-e-io-sanitization)
+[3.1.1 Runtime Enforcement e I/O
+Sanitization](#runtime-enforcement-e-io-sanitization)
 
 [3.1.2 Gestione dello stato e controllo deterministico del
 flusso](#gestione-dello-stato-e-controllo-deterministico-del-flusso)
@@ -130,8 +135,7 @@ formali](#accessibilità-naturale-a-metodi-formali)
 [3.2.1 Containerizzazione e validazione dell\'infrastruttura di
 base](#containerizzazione-e-validazione-dellinfrastruttura-di-base)
 
-[3.2.2 Implementazione del server MCP per
-AsmetaS](#implementazione-del-server-mcp-per-asmetas)
+[3.2.2 Implementazione del server MCP](#implementazione-del-server-mcp)
 
 [3.2.3 Design dei prompt e logica di traduzione
 neuro-simbolica](#design-dei-prompt-e-logica-di-traduzione-neuro-simbolica)
@@ -189,16 +193,20 @@ sicurezza]{.mark}](#algoritmo-di-runtime-enforcement-e-politiche-di-sicurezza)
 [[5.5 Preview su gemello e commit con
 conferma]{.mark}](#preview-su-gemello-e-commit-con-conferma) []{.mark}
 
+[5.6 Politiche di coordinamento e protocollo
+PGA](#politiche-di-coordinamento-e-protocollo-pga)
+
 [[6.]{.mark} Caso di studio e validazione
 sperimentale](#caso-di-studio-e-validazione-sperimentale)
 
-[6.1 Il sistema pillbox[]{.mark}](#sistema-pillbox) []{.mark}
+[6.1 Sistema pillbox[]{.mark}](#sistema-pillbox) []{.mark}
 
 [6.2 Modelli ASM e binding[]{.mark}](#modelli-asm-e-binding) []{.mark}
 
 [6.3 Scenari sperimentali[]{.mark}](#scenari-sperimentali) []{.mark}
 
-[6.4 Scelta del modello linguistico[]{.mark}](#scelta-del-modello-linguistico) []{.mark}
+[[6.4 Scelta del modello
+linguistico]{.mark}](#scelta-del-modello-linguistico) []{.mark}
 
 [6.5 Risultati[]{.mark}](#risultati) []{.mark}
 
@@ -206,9 +214,13 @@ sperimentale](#caso-di-studio-e-validazione-sperimentale)
 
 [7.1 Conclusioni[]{.mark}](#conclusioni) []{.mark}
 
-[7.2 Sviluppi futuri[]{.mark}](#sviluppi-futuri) []{.mark}
+[7.2 Limiti e validità](#limiti-e-validità)
+
+[7.3 Sviluppi futuri](#sviluppi-futuri)
 
 [8. Bibliografia](#bibliografia)
+
+[]{.mark}
 
 # [ ]{.mark}1. Introduzione[]{.mark}
 
@@ -267,7 +279,40 @@ di fondamento logico-matematico. Gli approcci di runtime verification e
 la ricerca sul ragionamento neuro-simbolico evidenziano quindi la
 pressante necessità di intercettare le azioni candidate prima
 dell\'esecuzione fisicamente reale, validandole rispetto a specifiche
-formali esplicite.
+formali esplicite. []{.mark}
+
+[Le singole tecniche di intercettazione, correzione locale e
+ripianificazione non sono di per sé nuove. Nel runtime enforcement
+classico un enforcer può bloccare un\'operazione non sicura oppure
+prescriverne una sostitutiva \[27\]; il framework RSE (Runtime Safety
+Enforcement) \[18\] ha mostrato come modellare con Abstract State
+Machines eseguibili sia la logica di enforcement sia il sistema
+controllato. Nel contesto specifico degli agenti LLM, RefineAct \[3\]
+verifica le azioni prima dell\'esecuzione rispetto a specifiche Prolog
+derivate automaticamente, chiedendo revisioni o inserendo passi di
+conferma; AgentSpec \[7\] offre regole di runtime configurabili che
+consentono di bloccare un\'azione, sottoporla all\'utente, sostituirla
+con un\'alternativa prescritta o richiedere un\'auto-valutazione
+all\'LLM. Altri lavori ragionano su sequenze di azioni anziché sulla
+singola chiamata: Agent-C \[22\] impone vincoli temporali su sequenze
+generate da LLM tramite specifiche formali, ragionamento SMT e
+generazione vincolata, mentre WikiPlanner \[23\] ricava vincoli
+temporali da conoscenza di dominio, li compila in monitor LTLf e ripara
+i piani multi-passo anche in scenari medici. Il ragionamento prospettico
+basato su modello è inoltre consolidato nei sistemi autonomi, ad esempio
+con il Dynamic Model Predictive Shielding nel reinforcement learning
+\[24\], e lavori recenti come MAPER \[25\] e POLARIS \[26\] integrano il
+ragionamento degli LLM all\'interno di architetture
+auto-adattative.]{.mark}
+
+[Rispetto a questi approcci, il presente lavoro affronta una questione
+più circoscritta: un\'azione corretta localmente può essere sicura in
+isolamento ma rendere non realizzabili o non sicure le azioni successive
+del piano, mentre richiedere all\'LLM di ripianificare a ogni rifiuto è
+costoso quando una correzione locale sarebbe sufficiente. Il contributo
+specifico consiste quindi nel decidere se applicare una correzione
+prescritta formalmente solo dopo averne simulato l\'effetto sulla parte
+del piano non ancora eseguita.]{.mark}
 
 ## 1.3 Contesto tecnologico[]{.mark}
 
@@ -311,7 +356,7 @@ In questo ecosistema, ogni componente assume un ruolo specifico:
   garantendo risultati rigorosi a fronte delle istruzioni ricevute
   dall\'agente.
 
-La struttura dei sistemi agentici basati su MCP (v. figura 1) riflette
+La struttura dei sistemi agentici basati su MCP (Figura 1) riflette
 appieno il principio di separazione delle responsabilità nel quale gli
 Agenti AI (attraverso framework, in questo caso LangGraph) si occupano
 del ragionamento e della pianificazione, mentre l'esecuzione delle
@@ -322,8 +367,8 @@ dall'esecuzione dei task.
 
 []{.mark}
 
-Figura 1: Architettura MCP
-\[https://modelcontextprotocol.io/docs/getting-started/intro\]
+Figura 1: Architettura di MCP. Fonte:
+<https://modelcontextprotocol.io/docs/getting-started/intro>
 
 ### [1.3.2 Dominio deterministico (metodi formali e ASMETA)]{.mark}
 
@@ -343,7 +388,12 @@ All\'interno di questo ecosistema è presente AsmetaS (ASMETA Simulator),
 ovvero il motore di simulazione vero e proprio. AsmetaS è capace di
 eseguire a run-time il modello matematico, valutando le regole,
 calcolando gli stati passo dopo passo e bloccando qualsiasi transizione
-non valida rispetto alle regole formali scritte nel modello \[1\].
+non valida rispetto alle regole formali scritte nel modello
+\[1\].[]{.mark}
+
+[Il simulatore può essere esposto come servizio tramite API REST
+(AsmetaS\\@run.time), modalità con cui i modelli ASM vengono eseguiti a
+runtime all\'interno del framework di enforcement \[21\].]{.mark}
 
 Nell'ambito di questo progetto AsmetaS rappresenta lo strumento (non-AI)
 a cui è assegnato il ruolo di "safety guard", ovvero di validazione di
@@ -372,9 +422,9 @@ guardie e invarianti di sicurezza, abilitando l\'esecuzione solo in
 presenza di un verdetto formale positivo e guidando cicli controllati di
 auto-correzione in caso di violazione.[]{.mark}
 
-L\'implementazione del pattern, comprensiva del motore di orchestrazione,
-del framework di enforcement e del caso di studio, è contenuta in un
-repository GitHub privato \[18\], a cui ha accesso la relatrice.
+[L\'implementazione del pattern, comprensiva del motore di
+orchestrazione, del framework di enforcement e del caso di studio, è
+contenuta in un repository GitHub \[17\].]{.mark}
 
 # 2. Nozioni di background
 
@@ -383,15 +433,15 @@ repository GitHub privato \[18\], a cui ha accesso la relatrice.
 L'evoluzione degli LLM sta cambiando il modo in cui questi vengono
 utilizzati, passando da interfacce conversazionali ad agenti autonomi
 che pianificano ed eseguono compiti complessi. In questo contesto
-nascono paradigmi come ReAct (Reasoning and Acting), che spingono il
-modello a formulare un pensiero logico e una pianificazione prima di
-invocare uno strumento esterno. I framework basati sui grafi
+nascono paradigmi come ReAct (Reasoning and Acting) \[2\], che spingono
+il modello a formulare un pensiero logico e una pianificazione prima di
+invocare uno strumento esterno (Figura 2). I framework basati sui grafi
 rappresentano l'ideale per la modellazione di questi processi,
 permettendo la gestione della memoria, la persistenza dello stato e la
-creazione di flussi ciclici e non lineari \[2\].
+creazione di flussi ciclici e non lineari \[4\] \[15\].
 
-Figura 2: paradigma ReAct
-(https://research.google/blog/react-synergizing-reasoning-and-acting-in-language-models/)
+Figura 2: Il paradigma ReAct. Fonte:
+<https://research.google/blog/react-synergizing-reasoning-and-acting-in-language-models/>
 
 Tuttavia, tutta questa autonomia espone il sistema a criticità
 significative sul piano della sicurezza e dell\'affidabilità. A
@@ -457,25 +507,31 @@ dimensioni di interconnessione \[5\]:
   artefatto formale che dichiara l\'identità, le capacità, i formati di
   input/output e le interfacce di invocazione dell\'agente.
 
-## 2.4 Valutazione e interoperabilità
+## 2.4 Valutazione e sicurezza degli agenti
 
 Le sfide relative al testing e alla standardizzazione di ambienti
 agentici complessi non sono trascurabili. Progetti di ricerca come
 ToolEMU introducono sandbox emulate tramite LLM per testare
 l\'esecuzione di tool esterni da parte degli agenti e valutarne i rischi
-\[6\]. Sul fronte dell'interoperabilità è invece nato AgentSpec, una
-specifica che propone un linguaggio dichiarativo standardizzato per
-definire gli agenti, garantendo la portabilità tra framework differenti
-\[7\]. La maggiore autonomia che hanno assunto gli agenti ha portato ad
+\[6\]. Sul fronte della sicurezza a runtime è stato invece proposto
+AgentSpec \[7\], un linguaggio specifico di dominio con cui l'utente
+definisce regole di enforcement per agenti LLM: ogni regola associa un
+evento che la attiva (ad esempio l'invocazione di un tool), un insieme
+di predicati da verificare sullo stato e un'azione di enforcement da
+applicare quando i predicati sono soddisfatti, come bloccare l'azione,
+sottoporla all'ispezione dell'utente, eseguire un'azione correttiva
+prescritta o richiedere all'LLM di rivalutare la propria scelta.
+
+La maggiore autonomia che hanno assunto gli agenti ha portato ad
 incidenti nel mondo reale, tra cui il già citato caso di Replit. Senza
 una specifica che codifichi cosa significhi effettivamente \"successo\"
 (inclusi i vincoli che devono essere rispettati durante l\'esecuzione),
 l\'agente non ha alcuna base per l\'autovalutazione. Può giudicare le
 proprie azioni solo in base al fatto che sembrino fare progressi verso
 l\'obiettivo, non in base al rispetto dei limiti a cui l\'utente è
-effettivamente interessato.Questo episodio mette in risalto la necessità
-di soluzioni che siano in grado di valutare e porre delle barriere alle
-azioni che questi framework agentici possono eseguire.
+effettivamente interessato. Questo episodio mette in risalto la
+necessità di soluzioni che siano in grado di valutare e porre delle
+barriere alle azioni che questi framework agentici possono eseguire.
 
 ## 2.5 LLM Symbolic Reasoning
 
@@ -527,14 +583,14 @@ ricerca \[11\].
 portato alla formalizzazione di specifici Agent Design Patterns volti a
 sistematizzare la pianificazione, la cooperazione tra componenti e la
 gestione dei vincoli operativi. Con riferimento al catalogo dei pattern
-per agenti basati su Foundation Model codificato da Lu et al. \[17\],
+per agenti basati su Foundation Model codificato da Liu et al. \[16\],
 l\'architettura sviluppata in questo lavoro si colloca all\'intersezione
 di tre modelli principali: Multimodal Guardrails, Cross-Reflection e
 Agent Adapter.]{.mark}
 
 ### [2.7.1 Multimodal Guardrails]{.mark}
 
-[Il pattern Multimodal Guardrails \[17\] risponde alla necessità di
+[Il pattern Multimodal Guardrails \[16\] risponde alla necessità di
 vincolare gli input e gli output dei modelli affinché rispettino
 requisiti stringenti di sicurezza, robustezza e conformità a regole
 predefinite. Nei contesti safety-critical, questo pattern prevede
@@ -548,7 +604,7 @@ sicure.]{.mark}
 
 ### [2.7.2 Cross-Reflection per il re-planning]{.mark}
 
-[I pattern di Reflection \[17\] descrivono la capacità di un sistema di
+[I pattern di Reflection \[16\] descrivono la capacità di un sistema di
 raffinare e correggere un piano di azione sulla base di un feedback. La
 tassonomia di riferimento distingue la Self-reflection (svolta
 autonomamente dal modello stesso) dalla Cross-reflection, in cui la
@@ -560,9 +616,9 @@ Questo feedback viene reiniettato nel contesto dell\'LLM per guidare un
 ciclo di riesecuzione e ri-pianificazione (re-planning) mirato e
 controllato.]{.mark}
 
-### [2.7.3 Agent adapter per l'interoperabilità (MCP)]{.mark}
+### [2.7.3 Agent adapter per l'interoperabilità]{.mark}
 
-[Il pattern Agent Adapter \[17\] definisce la presenza di interfacce
+[Il pattern Agent Adapter \[16\] definisce la presenza di interfacce
 d\'astrazione standardizzate volte a connettere l\'agente con strumenti
 ed estensioni esterne, garantendo interoperabilità, disaccoppiamento e
 manutenibilità del codice. Nell\'architettura realizzata, questo pattern
@@ -573,11 +629,37 @@ sia con il motore di verifica formale (AsmetaS) sia con i tool
 dell\'ambiente simulato mediante primitive ed esposizioni di schemi
 fortemente tipizzati.]{.mark}
 
+## 2.8 Sistemi auto-adattativi e ciclo MAPE-K[]{.mark}
+
+[Un sistema auto-adattativo è composto da un sistema gestito e da una
+logica di adattamento che lo osserva e lo modifica a runtime. Il
+riferimento architetturale più diffuso per questa logica è il ciclo
+MAPE-K \[19\], che separa quattro attività (Monitor, Analyze, Plan,
+Execute) operanti su una base di conoscenza condivisa (Knowledge): il
+sistema viene osservato, lo stato osservato viene analizzato rispetto ai
+requisiti, si pianifica un intervento e lo si attua.]{.mark}
+
+[Il runtime enforcement si presta naturalmente a questa struttura: il
+monitoraggio intercetta le azioni e osserva lo stato del sistema,
+l\'analisi verifica le proprietà di sicurezza, la pianificazione calcola
+un\'eventuale correzione e l\'esecuzione la applica. Il framework RSE
+\[18\] segue questo schema, usando modelli ASM eseguiti a runtime come
+conoscenza del ciclo.]{.mark}
+
+[Quando più obiettivi di adattamento devono convivere, Weyns et al.
+\[20\] descrivono il pattern Hierarchical Control, in cui cicli di
+controllo di livello inferiore gestiscono obiettivi specifici, mentre
+cicli di livello superiore ragionano su aspetti via via più ampi del
+sistema. Nell\'architettura proposta questo pattern si concretizza in
+due livelli: il ciclo inferiore è il framework di enforcement, che
+preserva i vincoli di sicurezza, mentre il ciclo superiore è l\'agente
+LLM, che persegue gli obiettivi dell\'utente (sezione 4.1).]{.mark}
+
 # 3. Idea Progettuale
 
 ## 3.1 Obiettivi
 
-### 3.1.1 Runtime Verification e I/O Sanitization
+### 3.1.1 Runtime Enforcement e I/O Sanitization
 
 Gli LLM sono per loro natura probabilistici e vulnerabili ad
 allucinazioni, faticano nel mantenere coerenza logica in sistemi
@@ -664,7 +746,7 @@ di sviluppo isolato e riproducibile attraverso Docker:
   gestione del protocolli e il recupero dinamico degli schemi da parte
   dell\'MCP Client.
 
-### 3.2.2 Implementazione del server MCP per AsmetaS
+### 3.2.2 Implementazione del server MCP
 
 La seconda fase prevede il wrapping del motore formale:[]{.mark}
 
@@ -744,12 +826,36 @@ implementando un\'architettura neuro-simbolica:[]{.mark}
   verifica formale di una specifica ASM (Abstract State Machine) tramite
   il web service AsmetaS.
 
+[Dal punto di vista dei sistemi auto-adattativi (sezione 2.8),
+l\'architettura è un\'istanza del pattern Hierarchical Control a due
+livelli \[20\]]{.mark}:[]{.mark}
+
+- [Livello inferiore (enforcement): il framework di enforcement realizza
+  un ciclo MAPE-K in cui il monitoraggio riceve il piano e legge lo
+  stato del sistema live, l\'analisi e la pianificazione sono svolte dai
+  modelli ASM (verifica dei vincoli, calcolo della correzione, preview
+  sul gemello) e l\'esecuzione consiste nel commit del comando
+  confermato. I modelli ASM caricati su AsmetaS costituiscono la
+  conoscenza del ciclo.]{.mark}
+
+- [Livello superiore (pianificazione orientata agli obiettivi):
+  l\'agente LangGraph interpreta la richiesta dell\'utente, formula un
+  piano e, in base alla decisione dell\'enforcement, prosegue con il
+  piano, accetta la correzione oppure ripianifica.]{.mark}
+
+[La separazione delle responsabilità è netta: l\'enforcement preserva i
+vincoli di sicurezza modellati, mentre il raggiungimento degli obiettivi
+dell\'utente resta compito del Planner. L\'agente non è mai autorizzato
+a modificare i parametri di sicurezza del sistema: può soltanto proporre
+azioni, che vengono comunque verificate.]{.mark}
+
 ## [4.2 Anatomia dei nodi LangGraph]{.mark}
 
 [L\'applicazione modella il ciclo decisionale tramite uno StateGraph di
 LangGraph, ovvero un tipo di grafo nel quale i nodi comunicano leggendo
 e scrivendo uno stato comune \[15\], nel nostro caso chiamato
-AgentState.]{.mark}
+AgentState. I componenti del sistema e le loro relazioni sono illustrati
+nel diagramma dei componenti in Figura 3.]{.mark}
 
 ### [4.2.1 PlannerNode]{.mark}
 
@@ -821,8 +927,8 @@ dell\'enforcer ASM diventa così com\'è il verdetto del gate:]{.mark}
   spiegare il motivo all\'utente, senza proporre altre azioni nel turno
   (final_answer_only).]{.mark}
 
-[A queste quattro decisioni il gate aggiunge due esiti propri, che
-non]{.mark} [provengono dagli ASM:]{.mark}
+[A queste quattro decisioni il gate aggiunge due esiti propri, che non
+provengono dagli ASM:]{.mark}
 
 - [BYPASS: è stato eseguito un tool di sola lettura;]{.mark}
 
@@ -839,13 +945,12 @@ ASM e ne attende la conferma. In questo modo nessun percorso del grafo
 può raggiungere l\'ambiente con un\'azione non verificata.]{.mark}
 
 [La funzione di instradamento gate_router riporta il controllo al
-PlannerNode per i verdetti BYPASS, ALLOW, REPLACE,]{.mark} [REPLAN e
-BLOCK, così che l\'LLM possa leggere l\'esito, proseguire con le azioni
-rimanenti del piano o formulare una spiegazione trasparente e
-comprensibile per l\'operatore, esplicitando se l\'azione richiesta è
-stata eseguita senza modifiche oppure se è stato necessario
-l\'intervento correttivo del gate di sicurezza. Il verdetto ERROR
-termina invece il turno.]{.mark}
+PlannerNode per i verdetti BYPASS, ALLOW, REPLACE, REPLAN e BLOCK, così
+che l\'LLM possa leggere l\'esito, proseguire con le azioni rimanenti
+del piano o formulare una spiegazione trasparente e comprensibile per
+l\'operatore, esplicitando se l\'azione richiesta è stata eseguita senza
+modifiche oppure se è stato necessario l\'intervento correttivo del gate
+di sicurezza. Il verdetto ERROR termina invece il turno.]{.mark}
 
 [Lo stato condiviso AgentState contiene la conversazione (messages), il
 verdetto del gate (guard_verdict) con il relativo motivo
@@ -858,8 +963,10 @@ nuovo messaggio dell\'utente.]{.mark}
 
 []{.mark}
 
-[Figura 3: Diagramma dei componenti. Realizzato tramite
+[Figura 3: Diagramma dei componenti. Realizzato con
 [draw.io](https://app.diagrams.net).]{.mark}
+
+[]{.mark}
 
 ## **4.3 Mappa dei protocolli e topologia di comunicazione[]{.mark}**
 
@@ -870,11 +977,11 @@ interfaccia con l\'ambiente fisico (eseguiti come processi isolati
 out-of-process):]{.mark}
 
 - [Cloud-to-Host Layer (HTTPS/REST): Il nodo proponente (PlannerNode),
-  basato sul modello di linguaggio Google Gemini (il cui nome è
+  basato sul modello di linguaggio Google Gemini (il modello specifico è
   indicato dalla variabile d\'ambiente GEMINI_MODEL, ad esempio
-  gemini-3.5-flash-lite), comunica con le API cloud per la
-  generazione del ragionamento e delle proposte d\'azione tramite
-  chiamate HTTP/REST]{.mark}.[]{.mark}
+  gemini-3.5-flash-lite), comunica con le API cloud per la generazione
+  del ragionamento e delle proposte d\'azione tramite chiamate
+  HTTP/REST]{.mark}.[]{.mark}
 
 - [In-Process Memory Layer (LangGraph): L\'orchestrazione tra il
   proponente, il Formal Gate e l\'esecutore avviene all\'interno
@@ -914,7 +1021,7 @@ fondamentali:]{.mark}
   forma di skills mediante i metodi standard del protocollo (tools/list
   e tools/call).]{.mark}
 
-- [Livello di Governance e Schema Enforvcement (Pydantic): la conformità
+- [Livello di Governance e Schema Enforcement (Pydantic): la conformità
   della comunicazione è garantita a runtime da contratti definiti
   tramite Pydantic (Plan e Action). I modelli descrivono i parametri del
   tool submit_plan, vengono esposti all\'LLM come JSON Schema tramite
@@ -929,9 +1036,7 @@ un flusso in tre fasi distinte:]{.mark}
 
 - [Inizializzazione della Sessione e Discovery MCP: All\'avvio
   dell\'applicazione, l\'host carica la configurazione del caso di
-  studio indicato dalla variabile d\'ambiente USE_CASE (così come
-  GEMINI_API_KEY, GEMINI_MODEL e ASMETAS_URL, anch\'esse obbligatorie e
-  prive di valore predefinito) e avvia il
+  studio indicato dalla variabile d\'ambiente USE_CASE e avvia il
   relativo server MCP come sottoprocesso stdio. Prima di servire
   richieste, il server carica i modelli ASM su AsmetaS, avvia le
   sessioni e inizializza il gateway di enforcement. L\'host interroga
@@ -1010,13 +1115,12 @@ verificato un errore operativo (il gate lo tratta come ERROR).]{.mark}
 
 ## 4.5 Framework di enforcement[]{.mark}
 
-[Il framework di enforcement deriva da un prototipo fornito dalla
-relatrice ed è il componente che orchestra i modelli ASM sul web service
-AsmetaS. È esterno a LangGraph, gira nel processo del server MCP del
-caso di studio e non contiene alcuna logica di dominio né decisioni di
-sicurezza: Python avvia le sessioni, esegue i passi, passa gli output di
-un modello come input di un altro e verifica la correlazione tra
-richiesta, simulazione, comando e conferma.]{.mark}
+[Il framework di enforcement è il componente che orchestra i modelli ASM
+sul web service AsmetaS. È esterno a LangGraph, gira nel processo del
+server MCP del caso di studio e non contiene alcuna logica di dominio né
+decisioni di sicurezza: Python avvia le sessioni, esegue i passi, passa
+gli output di un modello come input di un altro e verifica la
+correlazione tra richiesta, simulazione, comando e conferma.]{.mark}
 
 [I moduli principali sono:]{.mark}
 
@@ -1101,11 +1205,11 @@ raggiungibile soltanto attraverso il server MCP del caso di
 studio.[]{.mark}
 
 [Il nodo è realizzato in Python, senza chiamate a modelli linguistici,
-le sue regole sono fisse e il suo esito dipende unicamente dalla
-tool]{.mark} [call proposta dal Planner e dalla risposta del server MCP.
-Il nodo non]{.mark} [valuta di persona la sicurezza delle azioni: questa
-è decisa dai modelli]{.mark} [ASM, che il framework di enforcement
-esegue su AsmetaS nel processo del]{.mark}
+le sue regole sono fisse e il suo esito dipende unicamente dalla tool
+call proposta dal Planner e dalla risposta del server MCP. Il nodo non
+valuta di persona la sicurezza delle azioni: questa è decisa dai modelli
+ASM, che il framework di enforcement esegue su AsmetaS nel processo
+del]{.mark}
 
 [server. Il compito del gate è garantire che ogni azione attuativa passi
 da quella verifica e consegnare al Planner la decisione così com\'è,
@@ -1205,12 +1309,14 @@ bloccarla.]{.mark}
 
 []{.mark}Il ciclo di esecuzione del Formal Gate e l\'instradamento
 condizionale delle decisioni sono sintetizzati nel diagramma di workflow
-illustrato in *Figura 4*.[]{.mark}
+illustrato in Figura 4.[]{.mark}
 
-> []{.mark}
+[]{.mark}
 
-[Figura 4:]{.mark} Diagramma di workflow[. Realizzato tramite
+[Figura 4:]{.mark} Diagramma di workflow[. Realizzato con
 [draw.io](https://app.diagrams.net).]{.mark}
+
+[]{.mark}
 
 [In base alla decisione restituita dai modelli ASM, il sistema applica
 in modo deterministico una delle seguenti politiche di
@@ -1283,13 +1389,73 @@ conferma o lo rifiuta (ACK); l\'enforcer legge la conferma e produce la
 decisione finale. Decisione finale e conferma del sistema devono
 concordare: ogni discrepanza è trattata come errore operativo.]{.mark}
 
+## 5.6 Politiche di coordinamento e protocollo PGA
+
+[Quando l\'enforcer trova una correzione locale per un\'azione non
+ammissibile, il framework deve decidere come coordinare la correzione
+con il resto del piano dell\'agente. Si possono individuare tre
+politiche, che condividono le stesse regole di sicurezza e lo stesso
+framework di esecuzione e differiscono solo nella risposta a un\'azione
+localmente non sicura:]{.mark}
+
+- [Always-Replan (AR): rifiuta l\'azione e chiede un nuovo piano, senza
+  applicare la correzione]{.mark};[]{.mark}
+
+- [Local-First (LF): applica subito la correzione senza considerare le
+  azioni successive, se queste vengono bloccate, ripianifica in
+  seguito;]{.mark}
+
+- [Preview-Based Goal-Aware (PGA): simula la correzione e il piano
+  residuo su un gemello isolato del sistema e applica la correzione solo
+  se la simulazione è compatibile, altrimenti richiede un nuovo
+  piano.]{.mark}
+
+[Applicate agli scenari del capitolo 6, le tre politiche si comportano
+in modo diverso. Nello scenario M1, AR chiede un nuovo piano anche se la
+correzione sarebbe stata accettabile, LF applica la correzione e PGA la
+applica dopo la preview, pagando il costo della simulazione. Nello
+scenario M2, AR ripianifica prima di qualsiasi modifica, LF applica la
+prima correzione e può dover rimediare in seguito a un sistema già
+modificato, mentre PGA rileva il conflitto in anticipo e chiede un nuovo
+piano senza aver toccato il sistema. Il framework realizzato adotta la
+politica PGA, descritta nelle sezioni precedenti; l\'ipotesi alla base è
+che subordinare il commit di una correzione al suo effetto sul piano
+residuo eviti modifiche premature senza dover sempre ricorrere alla
+ripianificazione dell\'LLM.]{.mark}
+
+[Il protocollo PGA si articola in tre passi. Quando l\'enforcer giudica
+non ammissibile un\'azione del piano e prescrive una correzione locale,
+il framework simula la correzione seguita dalle azioni residue del piano
+su un gemello isolato del sistema, ottenuto rigiocando la storia degli
+input del sistema live (sezione 5.5). Dopo ogni azione simulata, lo
+stato del gemello viene confrontato con i vincoli di sicurezza e con i
+vincoli sugli obiettivi dell\'utente rappresentati esplicitamente nei
+modelli (nel caso di studio, available_from e latest_time). La preview
+restituisce uno di tre esiti: COMPATIBLE se tutte le azioni simulate
+sono state eseguite e i vincoli sono rispettati, CONFLICT se un vincolo
+modellato viene violato, UNKNOWN se le evidenze disponibili non bastano
+per decidere.]{.mark}
+
+[La correzione viene applicata al sistema live solo se la preview è
+COMPATIBLE e lo stato live non è cambiato nel frattempo; in caso
+contrario il piano viene rifiutato e l\'agente deve ripianificare. Per
+rendere verificabile questa condizione, il protocollo richiede
+identificativi di correlazione tra richiesta, preview e commit,
+un\'esecuzione che non duplichi i comandi e la versione aggiornata dello
+stato. La preview adottata è di tipo stretto: non tenta ulteriori
+correzioni delle azioni residue non ammissibili e qualsiasi violazione
+la rende conflittuale. Infine, un esito compatibile non autorizza
+l\'esecuzione incondizionata del resto del piano: ogni azione successiva
+è a sua volta sottoposta a enforcement rispetto allo stato reale
+del]{.mark} [sistema, come avviene nello scenario M2-C.]{.mark}
+
 # [6.]{.mark} Caso di studio e validazione sperimentale
 
-Il codice, i modelli ASM e gli scenari descritti in questo capitolo
-(M1, M2-A, M2-B e M2-C) sono contenuti nel repository del progetto
-\[18\], nelle cartelle use_cases/pillbox e resources. Gli scenari possono
-essere rieseguiti senza LLM tramite l\'esecutore di scenari JSON
-descritto nella sezione 6.3.
+Il codice, i modelli ASM e gli scenari descritti in questo capitolo (M1,
+M2-A, M2-B e M2-C) sono contenuti nel repository del progetto \[17\],
+nelle cartelle use_cases/pillbox e resources. Gli scenari possono essere
+rieseguiti senza LLM tramite l\'esecutore di scenari JSON descritto
+nella sezione 6.3.
 
 ## 6.1 Sistema pillbox[]{.mark}
 
@@ -1298,6 +1464,36 @@ che gestisce gli orari di assunzione di più farmaci distribuiti in
 scomparti. L\'utente chiede in linguaggio naturale di spostare una dose;
 l\'agente traduce la richiesta in un piano e il framework la verifica
 con i modelli ASM prima di modificare gli orari.]{.mark}
+
+[Il caso di studio estende il sistema auto-adattativo Medicine Reminder
+and Monitoring (MRM) presentato in \[18\], che combina un portapillole
+intelligente, un\'applicazione di controllo remoto e le prescrizioni
+mediche. Nel sistema originale l\'enforcer reagisce a eventi osservati
+sul portapillole, come dosi saltate o assunte in ritardo, applicando
+strategie correttive (riprogrammare la dose quando la distanza tra le
+assunzioni lo consente, saltare una dose mancata che interferirebbe con
+la successiva, evitare sovrapposizioni dopo un\'assunzione tardiva).
+Nell\'estensione considerata in questa tesi il sistema non si limita più
+a reagire su un calendario predefinito: un agente LLM riceve richieste
+spontanee del paziente (ad esempio posticipare una dose perché sarà
+fuori casa) e pianifica le azioni per soddisfarle, mentre i vincoli di
+sicurezza restano verificati in modo indipendente. L\'agente non è mai
+autorizzato a modificare prescrizioni, decidere dosaggi o inventare
+ritardi ammissibili: può soltanto proporre riprogrammazioni.]{.mark}
+
+[Le richieste dell\'utente rientrano in due categorie:]{.mark}
+
+- [M1 (richiesta correggibile localmente): il paziente chiede di
+  spostare una sola dose a un orario fuori dalla finestra ammessa o in
+  conflitto con una dose vicina; l\'enforcer trova un orario alternativo
+  che rispetta i vincoli e gli obiettivi espressi, e la correzione può
+  essere applicata senza un nuovo ciclo di pianificazione;]{.mark}
+
+- [M2 (richieste che interagiscono): il paziente chiede più spostamenti,
+  e una correzione sicura per la prima azione può entrare in conflitto
+  con le successive, rendendo necessaria la valutazione delle
+  interferenze tra farmaci ed eventualmente una nuova
+  pianificazione.]{.mark}
 
 [Lo stato iniziale, uguale a ogni avvio, è il seguente:]{.mark}
 
@@ -1321,11 +1517,10 @@ di sumatriptan ha una finestra clinica tra le 16:00 e le 18:00
 
 ## 6.2 Modelli ASM e binding[]{.mark}
 
-[Il caso di studio usa cinque modelli ASM, forniti dalla relatrice
-insieme al prototipo del framework di enforcement (sezione 4.5) e
-caricati da resources all\'avvio. Il modello del portapillole è stato
-rinominato pillboxDevice.asm perché il web service conteneva già un
-modello con il nome originale:]{.mark}
+[Il caso di studio usa cinque modelli ASM caricati da resources
+all\'avvio. Il modello del portapillole è stato rinominato
+pillboxDevice.asm perché il web service conteneva già un modello con il
+nome originale:]{.mark}
 
 - [scheduler.asm, l\'enforcer: valida la richiesta, cerca la correzione,
   chiede la preview, emette il comando e attende la conferma.
@@ -1355,8 +1550,6 @@ clinica, eseguita interamente all\'interno di un singolo passo ASM: a
 parità di distanza viene scelto l\'orario più basso, quindi il risultato
 è deterministico. Se nessun orario è ammissibile, la decisione è
 REPLAN.]{.mark}
-
-[]{.mark}
 
 [I parametri clinici (ora di sistema, finestre cliniche, distanze minime
 tra le dosi) sono contenuti nella configurazione di enforcement del caso
@@ -1413,7 +1606,7 @@ permette esperimenti controllati sul solo framework di enforcement,
 separando il comportamento dei modelli ASM da quello del modello
 linguistico.]{.mark}
 
-## 6.4 Scelta del modello linguistico[]{.mark}
+## [6.4 Scelta del modello linguistico]{.mark}
 
 [Per il Planner è stato usato gemini-3.5-flash-lite, appartenente alla
 famiglia Gemini di Google e raggiunto tramite API. La scelta di un
@@ -1437,15 +1630,13 @@ submit_plan. Entrambi sono verificati dalle prove della sezione
 [Il modello non è cablato nel codice: il nome è letto dalla variabile
 d\'ambiente GEMINI_MODEL, obbligatoria e senza valore predefinito, e può
 essere sostituito senza modificare il motore, in linea con
-l\'indipendenza dal modello linguistico indicata nelle conclusioni.
-Nelle prove precedenti era stato usato gemini-flash-lite-latest, un
-alias che punta alla versione corrente del modello; il passaggio a un
-identificativo esplicito rende le esecuzioni riproducibili nel tempo.]{.mark}
+l\'indipendenza dal modello linguistico indicata nelle
+conclusioni.]{.mark}
 
 ## 6.5 Risultati[]{.mark}
 
 [Gli scenari sono stati eseguiti sia con l\'esecutore senza LLM sia in
-chat, con il Planner basato su gemini-3.5-flash-lite, ottenendo in
+chat, con il Planner basato su gemini-flash-lite-latest, ottenendo in
 tutti i casi l\'esito atteso.]{.mark}
 
 - [M1: l\'orario richiesto (1050) dista solo 90 minuti dalla dose delle
@@ -1459,8 +1650,7 @@ tutti i casi l\'esito atteso.]{.mark}
   la seconda azione porta a \[1020, 1100\], con una distanza di 80
   minuti. Il coordinatore restituisce CONFLICT e la decisione è REPLAN
   con motivo PREVIEW_CONFLICT_REASON: sul sistema reale non viene
-  scritto nulla e il Planner, senza reinviare la sola prima azione per
-  farla passare, chiede all\'utente come procedere.]{.mark}
+  scritto nulla e il Planner chiede all\'utente come procedere.]{.mark}
 
 - [M2-B: lo stato finale \[1020, 1140\] sarebbe sicuro, ma quello
   intermedio \[1020, 1100\] non lo è. Il coordinatore mantiene
@@ -1478,7 +1668,7 @@ tutti i casi l\'esito atteso.]{.mark}
   eseguita la sola prima azione. Il Planner rilegge lo stato
   (versione 1) e invia la seconda azione, che è già ammissibile e viene
   eseguita senza preview (ALLOW). Il Planner omette i goals nel secondo
-  invio, perché l\'utente li aveva espressi solo per la prima
+  invio, perché l'utente li aveva espressi solo per la prima
   azione.]{.mark}
 
 [Altre prove in chat hanno verificato il comportamento in situazioni non
@@ -1491,32 +1681,17 @@ coperte dagli scenari:]{.mark}
   invio, e la richiesta si completa in un unico invio;]{.mark}
 
 - [la richiesta di spostare il sumatriptan alle 17:30 senza indicare
-  alcuna disponibilità produce lo stesso esito di M1 (REPLACE a 1020). Il
-  Planner invia goals vuoti, che lo schema accetta senza alterare il
-  risultato;]{.mark}
+  alcuna disponibilità produce lo stesso esito di M1 (REPLACE a
+  1020);]{.mark}
 
-- [una richiesta non esprimibile con le azioni ammesse (saltare la
-  prossima dose di fosamax) non genera alcun invio: il Planner legge lo
-  stato, spiega che il sistema consente solo di riprogrammare la dose a
-  un nuovo orario e lascia il sistema invariato;]{.mark}
+- [Una richiesta non esprimibile con le azioni ammesse (saltare la prima
+  dose di fosamax) non genera alcun invio: il Planner legge lo stato,
+  spiega che il sistema consente solo di riprogrammare la dose a un
+  nuovo orario e lascia il sistema invariato;]{.mark}
 
 - [una finestra impossibile (disponibilità dalle 20:00 con scadenza alle
   15:00) produce BLOCK con motivo INVALID_WINDOW e il Planner si limita
-  a spiegarne la ragione;]{.mark}
-
-- [lo stato e la versione del sistema restano coerenti tra turni
-  successivi della stessa conversazione.]{.mark}
-
-[Durante le prove è emerso anche un problema di prestazioni. Nella prima
-versione dello scheduler la correzione era cercata con una scelta non
-deterministica vincolata da una condizione di minimalità, che AsmetaS
-valutava provando gli orari in ordine casuale: su finestre ampie
-(l\'intera giornata) un singolo passo richiedeva da decine di secondi a
-oltre tre minuti, superando il limite di 30 secondi per chiamata e
-portando il gateway nello stato di recupero. La sostituzione con la
-scansione deterministica descritta nella sezione 6.2 ha ridotto il tempo
-della stessa richiesta a circa un secondo, a parità di correzione
-calcolata.]{.mark}
+  a spiegarne la ragione.]{.mark}
 
 # 7. Conclusioni e sviluppi futuri
 
@@ -1547,82 +1722,162 @@ e spiega all\'utente gli interventi dell\'enforcer, e che il sistema
 rifiuta piani che sarebbero sicuri nello stato finale ma non negli stati
 intermedi.]{.mark}
 
-## 7.2 Sviluppi futuri[]{.mark}
+## 7.2 Limiti e validità
 
-[\[TODO\]]{.mark}
+[I principali limiti riguardano la fedeltà del modello usato come
+gemello e la completezza dei vincoli modellati. Poiché la preview si
+basa su un modello eseguibile, non può tenere conto di eventi ambientali
+o comportamenti del sistema non modellati, e l\'esito compatibile vale
+solo rispetto ai vincoli di sicurezza e agli obiettivi rappresentati
+esplicitamente; nel caso di studio, ad esempio, gli obiettivi sono
+limitati a vincoli temporali come l\'orario massimo di assunzione. La
+strategia adottata è inoltre conservativa: qualsiasi violazione rilevata
+durante la preview porta alla ripianificazione, anche quando un\'azione
+successiva ripristinerebbe uno stato sicuro (scenario M2-B). Infine, una
+preview compatibile non garantisce la sicurezza delle esecuzioni future,
+che devono essere comunque verificate sullo stato reale del sistema. La
+validazione sperimentale, condotta su un solo caso di studio e su un
+numero limitato di scenari, ha carattere funzionale e non
+quantitativo.]{.mark}
 
-# 8. Bibliografia 
+## 7.3 Sviluppi futuri
 
-\[1\] Gargantini Angelo, Elvinia Riccobene, and Patrizia Scandurra. \"A
-metamodel-based language and a simulation engine for abstract state
-machines.\" *J. Univers. Comput. Sci.* 14.12 (2008).
+[Il lavoro si presta a diverse estensioni:]{.mark}
 
-\[2\] Yao, Shunyu, et al. \"React: Synergizing reasoning and acting in
-language models.\" *arXiv preprint arXiv:2210.03629* (2022).
+- [Costo della preview: occorre misurare il tempo di esecuzione e il
+  numero di passi ASM aggiuntivi introdotti dalla preview al crescere
+  della lunghezza del piano;]{.mark}
 
-\[3\] Batole, Fraol, Foutse Khomh, and Hridesh Rajan. \"RefineAct:
-Automatic Runtime Verification of LLM Agent Actions.\" *Proceedings of
-the 41st IEEE/ACM International Conference on Automated Software
-Engineering* (2026).
+- [Preview meno conservativa: si potrebbero valutare politiche che
+  tentano correzioni locali anche sulle azioni residue, o che
+  distinguono violazioni transitorie accettabili da violazioni
+  effettive, mantenendo garanzie formali;]{.mark}
 
-\[4\] Derouiche, Hana, Zaki Brahmi, and Haithem Mazeni. \"Agentic ai
-frameworks: Architectures, protocols, and design challenges.\" *arXiv
-preprint arXiv:2508.10146* (2025).
+- [Qualità della ripianificazione: valutare in modo sistematico, su un
+  insieme più ampio di richieste e di modelli linguistici, se le
+  richieste non strutturate vengono tradotte in piani adeguati e se il
+  Planner riesce a trovare alternative valide a partire dal feedback
+  formale;]{.mark}
 
-\[5\] Vaidhyanathan, Karthik, and Henry Muccini. \"Software Architecture
-Meets Agentic AI.\" *2026 IEEE 23rd International Conference on Software
-Architecture Companion* (2026).
+- [Nuovi casi di studio: grazie alla separazione tra motore generico,
+  framework di enforcement e casi di studio (sezione 4.6), il pattern
+  può essere applicato ad altri domini safety-critical aggiungendo
+  soltanto modelli ASM, binding e server MCP.]{.mark}
 
-\[6\] Ruan, Yangjun, et al. \"Identifying the risks of LM agents with an
-LM-emulated sandbox.\" *International Conference on Learning
-Representations* (2024).
+# 8. Bibliografia
 
-\[7\] Wang, Haoyu, Christopher M. Poskitt, and Jun Sun. \"Agentspec:
-Customizable runtime enforcement for safe and reliable llm agents.\"
-*Proceedings of the 2026 IEEE/ACM 48th International Conference on
-Software Engineering* (2026).
+\[1\] A. Gargantini, E. Riccobene, and P. Scandurra, "A metamodel-based
+language and a simulation engine for abstract state machines," *J.
+Univers. Comput. Sci*., vol. 14, no. 12, 2008.
 
-\[8\] Ehtesham, Abul, et al. \"A survey of agent interoperability
-protocols: Model context protocol (mcp), agent communication protocol
-(acp), agent-to-agent protocol (a2a), and agent network protocol
-(anp).\" *arXiv preprint arXiv:2505.02279* (2025).
+\[2\] S. Yao, J. Zhao, D. Yu, N. Du, I. Shafran, K. Narasimhan, and Y.
+Cao, "ReAct: Synergizing reasoning and acting in language models," in
+*Proc. 11th Int. Conf. Learning Representations (ICLR)*, 2023.
 
-\[9\] Sultan, Oren, Eitan Stern, and Dafna Shahaf. \"A Neuro-Symbolic
-Approach for Reliable Proof Generation with LLMs: A Case Study in
-Euclidean Geometry.\" *arXiv preprint arXiv:2505.14479* (2025).
+\[3\] F. Batole, F. Khomh, and H. Rajan, "RefineAct: Automatic runtime
+verification of LLM agent actions," in *Proc. 41st IEEE/ACM Int. Conf.
+Automated Software Engineering (ASE)*, Munich, Germany, 2026.
 
-\[10\] Bombarda, Andrea, et al. \"Formalizing and validating properties
-in Asmeta with Large Language Models.\" *arXiv preprint
-arXiv:2603.15375* (2026).
+\[4\] H. Derouiche, Z. Brahmi, and H. Mazeni, "Agentic AI frameworks:
+Architectures, protocols, and design challenges," arXiv preprint
+arXiv:2508.10146, 2025.
 
-\[11\] Palavalli, Mayur Amarnath, Mark Santolucito. \"Using a feedback
-loop for LLM-based infrastructure as code generation.\" *arXiv preprint
-arXiv:2411.19043* (2024).
+\[5\] K. Vaidhyanathan and H. Muccini, "Software architecture meets
+agentic AI," tutorial at the *IEEE Int. Conf. Software Architecture
+(ICSA 2026)*, 2026.
 
-\[12\] M. Tyson, \"AI coding platform goes rogue during code freeze and
-deletes entire company database,\" Tom\'s Hardware, 2025. Disponibile:
-[[https://www.tomshardware.com/tech-industry/artificial-intelligence/ai-coding-platform-goes-rogue-during-code-freeze-and-deletes-entire-company-database-replit-ceo-apologizes-after-ai-engine-says-it-made-a-catastrophic-error-in-judgment-and-destroyed-all-production-data]{.underline}](https://www.tomshardware.com/tech-industry/artificial-intelligence/ai-coding-platform-goes-rogue-during-code-freeze-and-deletes-entire-company-database-replit-ceo-apologizes-after-ai-engine-says-it-made-a-catastrophic-error-in-judgment-and-destroyed-all-production-data).
+\[6\] Y. Ruan et al., "Identifying the risks of LM agents with an
+LM-emulated sandbox," in *Proc. Int. Conf. Learning Representations
+(ICLR)*, 2024.
 
-\[13\] Jabbarvaziri, Faramarz. \"Remember, Don\'t Re-read: Stateful
-ReAct Agents for Token-Efficient Autonomous Experimentation.\" *arXiv
-preprint arXiv:2606.14945* (2026).
+\[7\] H. Wang, C. M. Poskitt, and J. Sun, "AgentSpec: Customizable
+runtime enforcement for safe and reliable LLM agents," in *Proc. 48th
+IEEE/ACM Int. Conf. Software Engineering (ICSE)*, 2026.
 
-\[14\] A2A protocol documentation, "A2A and MCP", 2026. Disponibile:
-[[https://a2a-protocol.org/latest/topics/a2a-and-mcp/#a2a-mcp-complementary-protocols-for-agentic-systems]{.underline}](https://a2a-protocol.org/latest/topics/a2a-and-mcp/#a2a-mcp-complementary-protocols-for-agentic-systems).
+\[8\] A. Ehtesham et al., "A survey of agent interoperability protocols:
+Model Context Protocol (MCP), Agent Communication Protocol (ACP),
+Agent-to-Agent Protocol (A2A), and Agent Network Protocol (ANP)," arXiv
+preprint arXiv:2505.02279, 2025.
 
-\[15\] Langchain Reference, "StateGraph", 2026. Disponibile:
-[[https://reference.langchain.com/python/langgraph/graph/state/StateGraph]{.underline}](https://reference.langchain.com/python/langgraph/graph/state/StateGraph).
+\[9\] O. Sultan, E. Stern, and D. Shahaf, "A neuro-symbolic approach for
+reliable proof generation with LLMs: A case study in Euclidean
+geometry," arXiv preprint arXiv:2505.14479, 2025.
 
-\[16\] Matsumoto, Daichi, et al. \"A2A Routing Service with MCP
-Integration: Bridging Security, Auditability, and Governance in AI Agent
-Systems.\" *2025 IEEE International Conference on Computing (ICOCO)*.
-IEEE, 2025.
+\[10\] A. Bombarda, S. Bonfanti, A. Gargantini, and N. Pellegrinelli,
+"Formalizing and validating properties in Asmeta with large language
+models," arXiv preprint arXiv:2603.15375, 2026.
 
-\[17\] Liu, Yue, et al. \"Agent design pattern catalogue: A collection
-of architectural patterns for foundation model based agents.\" *Journal
-of Systems and Software* 220 (2025): 112278.
+\[11\] M. A. Palavalli and M. Santolucito, "Using a feedback loop for
+LLM-based infrastructure as code generation," arXiv preprint
+arXiv:2411.19043, 2024.
 
-\[18\] Gallizioli, Lorenzo. \"agentic-mcp-framework: runtime enforcement
-delle azioni di agenti LLM mediante Abstract State Machines.\" Repository
-GitHub privato, accessibile alla relatrice, 2026. URL:
-https://github.com/gallizzz/agentic-mcp-framework.
+\[12\] M. Tyson, "AI coding platform goes rogue during code freeze and
+deletes entire company database," *Tom's Hardware*, 2025. \[Online\].
+Available:
+<https://www.tomshardware.com/tech-industry/artificial-intelligence/ai-coding-platform-goes-rogue-during-code-freeze-and-deletes-entire-company-database-replit-ceo-apologizes-after-ai-engine-says-it-made-a-catastrophic-error-in-judgment-and-destroyed-all-production-data>
+
+\[13\] F. Jabbarvaziri, "Remember, don't re-read: Stateful ReAct agents
+for token-efficient autonomous experimentation," arXiv preprint
+arXiv:2606.14945, 2026.
+
+\[14\] A2A Protocol, "A2A and MCP," 2026. \[Online\]. Available:
+<https://a2a-protocol.org/latest/topics/a2a-and-mcp/#a2a-mcp-complementary-protocols-for-agentic-systems>
+
+\[15\] LangChain, "StateGraph," *LangChain Reference*, 2026. \[Online\].
+Available:
+<https://reference.langchain.com/python/langgraph/graph/state/StateGraph>
+
+\[16\] Y. Liu et al., "Agent design pattern catalogue: A collection of
+architectural patterns for foundation model based agents," arXiv
+preprint arXiv:2405.10467, 2024.
+
+\[17\] L. Gallizioli, "agentic-mcp-framework: runtime enforcement delle
+azioni di agenti LLM mediante Abstract State Machines," GitHub
+repository, 2026. \[Online\]. Available:
+<https://github.com/gallizzz/agentic-mcp-framework>
+
+\[18\] S. Bonfanti, E. Riccobene, and P. Scandurra, "A component
+framework for the runtime enforcement of safety properties," *J. Syst.
+Softw.*, vol. 198, p. 111605, 2023.
+
+\[19\] J. O. Kephart and D. M. Chess, "The vision of autonomic
+computing," *Computer*, vol. 36, no. 1, pp. 41--50, 2003.
+
+\[20\] D. Weyns, B. Schmerl, V. Grassi, S. Malek, R. Mirandola, C.
+Prehofer, J. Wuttke, J. Andersson, H. Giese, and K. M. Göschka, "On
+patterns for decentralized control in self-adaptive systems," in
+*Software Engineering for Self-Adaptive Systems II*. Berlin, Heidelberg:
+Springer, 2013, pp. 76--107.
+
+\[21\] A. Bombarda, S. Bonfanti, A. Gargantini, E. Riccobene, and P.
+Scandurra, "ASMETA: A comprehensive tool set for formal system
+engineering based on abstract state machines," *Sci. Comput. Program*.,
+vol. 253, p. 103508, 2026.
+
+\[22\] A. Kamath, S. Zhang, C. Xu, S. Ugare, G. Singh, and S.
+Misailovic, "Enforcing temporal constraints for LLM agents," 2025,
+\[Online\], Available: <https://arxiv.org/abs/2512.23738>
+
+\[23\] B. Zhang, "WikiPlanner: Wiki-derived temporal monitors for safe
+LLM agent planning -- a medical-domain proof of concept," *AI Agent*,
+vol. 2, p. 25, 2026.
+
+\[24\] A. Banerjee, K. Rahmani, J. Biswas, and I. Dillig, "Dynamic model
+predictive shielding for provably safe reinforcement learning," in
+*Advances in Neural Information Processing Systems*, vol. 37, 2024.
+
+\[25\] P. Maia, L. Vieira, G. L. B. De Oliveira, M. Chagas, A. Bandeira,
+and C. Rocha, "MAPER: Extending MAPE-K with LLM-based reasoning to
+manage unanticipated situations in self-adaptive systems," in *Proc.
+21st Int. Conf. Software Engineering for Adaptive and Self-Managing
+Systems (SEAMS '26)*. ACM, 2026, pp. 239--250.
+
+\[26\] D. Pandey, V. Gupta, P. Singhal, and K. Vaidhyanathan, "POLARIS:
+Is multi-agentic reasoning the next wave in engineering self-adaptive
+systems?," in *Proc. 21st Int. Conf. Software Engineering for Adaptive
+and Self-Managing Systems (SEAMS 2026)*, Rio de Janeiro, Brazil. ACM,
+2026, pp. 188--193.
+
+\[27\] Y. Falcone, L. Mariani, A. Rollet, and S. Saha, "Runtime failure
+prevention and reaction," in *Lectures on Runtime Verification*. Cham:
+Springer, 2018, pp. 103--134.
