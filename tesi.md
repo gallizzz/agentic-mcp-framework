@@ -74,92 +74,75 @@ ad alcuni casi di studio in ambienti simulati.
 
 [1.3 Contesto tecnologico[]{.mark}](#contesto-tecnologico) []{.mark}
 
-[[1.3.1 Dominio probabilistico (Ecosistema
-AI)]{.mark}](#dominio-probabilistico-ecosistema-ai) []{.mark}
+[[1.3.1 Dominio probabilistico: LLM, LangGraph e MCP]{.mark}](#dominio-probabilistico-llm-langgraph-e-mcp)
 
-[[1.3.2 Dominio deterministico (metodi formali e
-ASMETA)]{.mark}](#dominio-deterministico-metodi-formali-e-asmeta)
-[]{.mark}
+[[1.3.2 Dominio deterministico: ASM e ASMETA]{.mark}](#dominio-deterministico-asm-e-asmeta)
 
 [[1.4 Soluzione proposta]{.mark}](#soluzione-proposta)
 
 [2. Nozioni di background](#nozioni-di-background)
 
-[2.1 Paradigma ReAct](#paradigma-react)
+[[2.1 Paradigma ReAct e limiti dei vincoli nel prompt]{.mark}](#paradigma-react-e-limiti-dei-vincoli-nel-prompt)
 
 [2.2 Framework agentici](#framework-agentici)
 
-[2.3 Protocolli di interconnessione](#protocolli-di-interconnessione)
+[[2.3 Protocolli di interconnessione: MCP e A2A]{.mark}](#protocolli-di-interconnessione-mcp-e-a2a)
 
 [2.4 Valutazione e sicurezza degli
 agenti](#valutazione-e-sicurezza-degli-agenti)
 
-[2.5 LLM Symbolic Reasoning](#llm-symbolic-reasoning)
+[[2.5 Ragionamento neuro-simbolico e metodi formali]{.mark}](#ragionamento-neuro-simbolico-e-metodi-formali)
 
-[2.6 Feedback Loop e limiti
-all'auto-correzione](#feedback-loop-e-limiti-allauto-correzione)
+[[2.6 Feedback loop e limiti dell'auto-correzione]{.mark}](#feedback-loop-e-limiti-dellauto-correzione)
 
-[[2.7 Agent design pattern]{.mark} per la
-sicurezza[]{.mark}](#agent-design-pattern-per-la-sicurezza) []{.mark}
+[[2.7 Design pattern per agenti]{.mark}](#design-pattern-per-agenti)
 
-[[2.7.1 Multimodal Guardrails]{.mark}](#multimodal-guardrails) []{.mark}
+[[2.7.1 Multimodal Guardrails per l'intercettazione delle azioni]{.mark}](#multimodal-guardrails-per-lintercettazione-delle-azioni)
 
 [[2.7.2 Cross-Reflection per il
 re-planning]{.mark}](#cross-reflection-per-il-re-planning) []{.mark}
 
-[[2.7.3 Agent adapter per
-l'interoperabilità]{.mark}](#agent-adapter-per-linteroperabilità)
-[]{.mark}
+[[2.7.3 Agent Adapter per l'interoperabilità]{.mark}](#agent-adapter-per-linteroperabilità)
 
 [2.8 Sistemi auto-adattativi e ciclo
 MAPE-K[]{.mark}](#sistemi-auto-adattativi-e-ciclo-mape-k) []{.mark}
 
-[3. Idea Progettuale](#idea-progettuale)
+[[3. Idea progettuale]{.mark}](#idea-progettuale)
 
 [3.1 Obiettivi](#obiettivi)
 
-[3.1.1 Runtime Enforcement e I/O
-Sanitization](#runtime-enforcement-e-io-sanitization)
+[[3.1.1 Runtime enforcement e I/O sanitization]{.mark}](#runtime-enforcement-e-io-sanitization)
 
 [3.1.2 Gestione dello stato e controllo deterministico del
 flusso](#gestione-dello-stato-e-controllo-deterministico-del-flusso)
 
-[3.1.3 Costruire un\'infrastruttura
-modulare](#costruire-uninfrastruttura-modulare)
+[[3.1.3 Infrastruttura modulare basata su MCP]{.mark}](#infrastruttura-modulare-basata-su-mcp)
 
-[3.1.4 Accessibilità naturale a metodi
-formali](#accessibilità-naturale-a-metodi-formali)
+[[3.1.4 Accesso ai metodi formali in linguaggio naturale]{.mark}](#accesso-ai-metodi-formali-in-linguaggio-naturale)
 
 [3.2 Piano d'azione](#piano-dazione)
 
-[3.2.1 Containerizzazione e validazione dell\'infrastruttura di
-base](#containerizzazione-e-validazione-dellinfrastruttura-di-base)
+[[3.2.1 Containerizzazione e validazione dell'infrastruttura]{.mark}](#containerizzazione-e-validazione-dellinfrastruttura)
 
-[3.2.2 Implementazione del server MCP](#implementazione-del-server-mcp)
+[[3.2.2 Sviluppo del framework di enforcement e del server MCP]{.mark}](#sviluppo-del-framework-di-enforcement-e-del-server-mcp)
 
-[3.2.3 Design dei prompt e logica di traduzione
-neuro-simbolica](#design-dei-prompt-e-logica-di-traduzione-neuro-simbolica)
+[[3.2.3 Progettazione dei prompt]{.mark}](#progettazione-dei-prompt)
 
 [3.2.4 Sviluppo del grafo LangGraph](#sviluppo-del-grafo-langgraph)
 
-[[4.]{.mark} Progettazione e
-implementazione](#progettazione-e-implementazione)
+[[4. Architettura del sistema]{.mark}](#architettura-del-sistema)
 
-[[4.1 Architettura
-neuro-simbolica]{.mark}](#architettura-neuro-simbolica)
+[[4.1 Architettura neuro-simbolica a controllo gerarchico]{.mark}](#architettura-neuro-simbolica-a-controllo-gerarchico)
 
-[[4.2 Anatomia dei nodi LangGraph]{.mark}](#anatomia-dei-nodi-langgraph)
+[[4.2 Nodi del grafo LangGraph]{.mark}](#nodi-del-grafo-langgraph)
 
-[[4.2.1 PlannerNode]{.mark}](#plannernode)
+[[4.2.1 PlannerNode e prompt di sistema]{.mark}](#plannernode-e-prompt-di-sistema)
 
-[[4.2.2 FormalGateNode]{.mark}](#formalgatenode)
+[[4.2.2 FormalGateNode e verdetti]{.mark}](#formalgatenode-e-verdetti)
 
-[[4.2.3 Instradamento dopo il Formal
-Gate]{.mark}](#instradamento-dopo-il-formal-gate)
+[[4.2.3 Instradamento e stato condiviso]{.mark}](#instradamento-e-stato-condiviso)
 
-[4.3 Mappa dei protocolli e topologia di
-comunicazione[]{.mark}](#mappa-dei-protocolli-e-topologia-di-comunicazione)
-[]{.mark}
+[[4.3 Protocolli e livelli di comunicazione]{.mark}](#protocolli-e-livelli-di-comunicazione)
 
 [4.4 Ciclo di esecuzione e schema
 enforcement[]{.mark}](#ciclo-di-esecuzione-e-schema-enforcement)
@@ -168,27 +151,18 @@ enforcement[]{.mark}](#ciclo-di-esecuzione-e-schema-enforcement)
 [4.5 Framework di enforcement[]{.mark}](#framework-di-enforcement)
 []{.mark}
 
-[4.6 Separazione tra motore generico e caso di
-studio[]{.mark}](#separazione-tra-motore-generico-e-caso-di-studio)
-[]{.mark}
+[[4.6 Separazione tra motore generico e casi di studio]{.mark}](#separazione-tra-motore-generico-e-casi-di-studio)
 
-[[5.]{.mark} Progettazione e implementazione del Formal
-Gate](#progettazione-e-implementazione-del-formal-gate)
+[[5. Formal Gate e protocollo di enforcement]{.mark}](#formal-gate-e-protocollo-di-enforcement)
 
 [5.1 Ruolo architetturale e filosofia di
 design](#ruolo-architetturale-e-filosofia-di-design)
 
-[5.2 Meccanismo di filtering e bypass delle azioni
-read-only[]{.mark}](#meccanismo-di-filtering-e-bypass-delle-azioni-read-only)
-[]{.mark}
+[[5.2 Classificazione dei tool e bypass delle azioni di sola lettura]{.mark}](#classificazione-dei-tool-e-bypass-delle-azioni-di-sola-lettura)
 
-[[5.3 Integrazione con il framework di enforcement via MCP
-Client]{.mark}](#integrazione-con-il-framework-di-enforcement-via-mcp-client)
-[]{.mark}
+[[5.3 Invio del piano al framework di enforcement]{.mark}](#invio-del-piano-al-framework-di-enforcement)
 
-[[5.4 Algoritmo di runtime enforcement e politiche di
-sicurezza]{.mark}](#algoritmo-di-runtime-enforcement-e-politiche-di-sicurezza)
-[]{.mark}
+[[5.4 Workflow del Formal Gate e politiche di sicurezza]{.mark}](#workflow-del-formal-gate-e-politiche-di-sicurezza)
 
 [[5.5 Preview su gemello e commit con
 conferma]{.mark}](#preview-su-gemello-e-commit-con-conferma) []{.mark}
@@ -321,7 +295,7 @@ questo progetto intende far comunicare: da un lato l\'ecosistema
 probabilistico dell\'intelligenza artificiale e degli agenti,
 dall\'altro l\'ecosistema deterministico dei metodi formali.
 
-### [1.3.1 Dominio probabilistico (Ecosistema AI)]{.mark}
+### [1.3.1 Dominio probabilistico: LLM, LangGraph e MCP]{.mark}
 
 [Caratterizzato dall\'impiego di modelli linguistici di grandi
 dimensioni per la comprensione dell\'intento dell\'utente in linguaggio
@@ -370,7 +344,7 @@ dall'esecuzione dei task.
 Figura 1: Architettura di MCP. Fonte:
 <https://modelcontextprotocol.io/docs/getting-started/intro>
 
-### [1.3.2 Dominio deterministico (metodi formali e ASMETA)]{.mark}
+### [1.3.2 Dominio deterministico: ASM e ASMETA]{.mark}
 
 Le Abstract State Machines (ASM) sono un metodo formale basato sulla
 matematica per la specifica e la verifica di sistemi complessi. A
@@ -428,7 +402,7 @@ contenuta in un repository GitHub \[17\].]{.mark}
 
 # 2. Nozioni di background
 
-## 2.1 Paradigma ReAct
+## [2.1 Paradigma ReAct e limiti dei vincoli nel prompt]{.mark}
 
 L'evoluzione degli LLM sta cambiando il modo in cui questi vengono
 utilizzati, passando da interfacce conversazionali ad agenti autonomi
@@ -482,7 +456,7 @@ conversano e agiscono per risolvere task complessi, supportando
 nativamente l\'esecuzione di codice e cicli di feedback strutturati
 \[4\].
 
-## 2.3 Protocolli di interconnessione
+## [2.3 Protocolli di interconnessione: MCP e A2A]{.mark}
 
 Il panorama dei framework agentici presenta principalmente due
 dimensioni di interconnessione \[5\]:
@@ -533,7 +507,7 @@ effettivamente interessato. Questo episodio mette in risalto la
 necessità di soluzioni che siano in grado di valutare e porre delle
 barriere alle azioni che questi framework agentici possono eseguire.
 
-## 2.5 LLM Symbolic Reasoning
+## [2.5 Ragionamento neuro-simbolico e metodi formali]{.mark}
 
 Negli ultimi anni la ricerca ha iniziato ad utilizzare approcci
 neuro-simbolici per superare la mancanza di affidabilità deduttiva degli
@@ -558,7 +532,7 @@ intercettando ogni singola proposta di transizione e assicurando
 l\'inviolabilità degli invarianti di sistema prima di abilitare
 l\'attuazione fisica.
 
-## 2.6 Feedback Loop e limiti all'auto-correzione
+## [2.6 Feedback loop e limiti dell'auto-correzione]{.mark}
 
 Indagini sull\'uso di feedback loop per la generazione guidata di codice
 hanno dimostrato che restituire all\'agente gli errori e gli avvisi
@@ -577,7 +551,7 @@ limiti di iterazione. Questo impedirà che il sistema continui a iterare
 a vuoto una volta raggiunto il limite di inefficacia documentato dalla
 ricerca \[11\].
 
-## [2.7 Agent design pattern]{.mark} per la sicurezza[]{.mark}
+## [2.7 Design pattern per agenti]{.mark}
 
 [La progettazione di sistemi complessi basati su modelli linguistici ha
 portato alla formalizzazione di specifici Agent Design Patterns volti a
@@ -588,7 +562,7 @@ l\'architettura sviluppata in questo lavoro si colloca all\'intersezione
 di tre modelli principali: Multimodal Guardrails, Cross-Reflection e
 Agent Adapter.]{.mark}
 
-### [2.7.1 Multimodal Guardrails]{.mark}
+### [2.7.1 Multimodal Guardrails per l'intercettazione delle azioni]{.mark}
 
 [Il pattern Multimodal Guardrails \[16\] risponde alla necessità di
 vincolare gli input e gli output dei modelli affinché rispettino
@@ -616,7 +590,7 @@ Questo feedback viene reiniettato nel contesto dell\'LLM per guidare un
 ciclo di riesecuzione e ri-pianificazione (re-planning) mirato e
 controllato.]{.mark}
 
-### [2.7.3 Agent adapter per l'interoperabilità]{.mark}
+### [2.7.3 Agent Adapter per l'interoperabilità]{.mark}
 
 [Il pattern Agent Adapter \[16\] definisce la presenza di interfacce
 d\'astrazione standardizzate volte a connettere l\'agente con strumenti
@@ -655,11 +629,11 @@ due livelli: il ciclo inferiore è il framework di enforcement, che
 preserva i vincoli di sicurezza, mentre il ciclo superiore è l\'agente
 LLM, che persegue gli obiettivi dell\'utente (sezione 4.1).]{.mark}
 
-# 3. Idea Progettuale
+# [3. Idea progettuale]{.mark}
 
 ## 3.1 Obiettivi
 
-### 3.1.1 Runtime Enforcement e I/O Sanitization
+### [3.1.1 Runtime enforcement e I/O sanitization]{.mark}
 
 Gli LLM sono per loro natura probabilistici e vulnerabili ad
 allucinazioni, faticano nel mantenere coerenza logica in sistemi
@@ -687,7 +661,7 @@ flusso di controllo è regolato da edge condizionali deterministici:
   impedisce l\'esecuzione e devia il flusso verso il nodo di
   pianificazione, innescando un ciclo di retroazione.
 
-### 3.1.3 Costruire un\'infrastruttura modulare
+### [3.1.3 Infrastruttura modulare basata su MCP]{.mark}
 
 Invece di scrivere codice custom che lega indissolubilmente un LLM
 specifico al web service AsmetaS, si strutturerà il sistema secondo le
@@ -714,7 +688,7 @@ invocare la sanitizzazione delle azioni con una latenza minima e una
 struttura snella, evitando l\'overhead informatico e la complessità di
 gestione di contratti di rete A2A.]{.mark}
 
-### 3.1.4 Accessibilità naturale a metodi formali
+### [3.1.4 Accesso ai metodi formali in linguaggio naturale]{.mark}
 
 La comprensione e l'utilizzo delle Abstract State Machines non sono
 immediati, necessitano di esperienza nel campo della logica formale e
@@ -731,7 +705,7 @@ modello sottostante.
 
 ## 3.2 Piano d'azione
 
-### 3.2.1 Containerizzazione e validazione dell\'infrastruttura di base
+### [3.2.1 Containerizzazione e validazione dell'infrastruttura]{.mark}
 
 La prima fase del progetto è dedicata all\'allestimento di un ambiente
 di sviluppo isolato e riproducibile attraverso Docker:
@@ -746,7 +720,7 @@ di sviluppo isolato e riproducibile attraverso Docker:
   gestione del protocolli e il recupero dinamico degli schemi da parte
   dell\'MCP Client.
 
-### 3.2.2 Implementazione del server MCP
+### [3.2.2 Sviluppo del framework di enforcement e del server MCP]{.mark}
 
 La seconda fase prevede il wrapping del motore formale:[]{.mark}
 
@@ -771,7 +745,7 @@ La seconda fase prevede il wrapping del motore formale:[]{.mark}
   raggiungere i modelli ASM, e che le risposte appartengano alla
   tassonomia delle decisioni (ALLOW, REPLACE, REPLAN, BLOCK).]{.mark}
 
-### 3.2.3 Design dei prompt e logica di traduzione neuro-simbolica
+### [3.2.3 Progettazione dei prompt]{.mark}
 
 Sarà necessario istruire l'agente proponente tramite prompt per il suo
 ruolo di "traduttore" dell'intento espresso in linguaggio colloquiale
@@ -819,9 +793,9 @@ stato l\'esito della verifica formale.
     proponente può solo formulare la risposta finale, riportando gli
     esiti reali e le azioni non eseguite.
 
-# [4.]{.mark} Progettazione e implementazione
+# [4. Architettura del sistema]{.mark}
 
-## [4.1 Architettura neuro-simbolica]{.mark}
+## [4.1 Architettura neuro-simbolica a controllo gerarchico]{.mark}
 
 Nelle applicazioni mission-critical (guida autonoma, robotica medica,
 sistemi industriali), l\'attuazione diretta da parte di un LLM è
@@ -859,7 +833,7 @@ dell\'utente resta compito del Planner. L\'agente non è mai autorizzato
 a modificare i parametri di sicurezza del sistema: può soltanto proporre
 azioni, che vengono comunque verificate.]{.mark}
 
-## [4.2 Anatomia dei nodi LangGraph]{.mark}
+## [4.2 Nodi del grafo LangGraph]{.mark}
 
 [L\'applicazione modella il ciclo decisionale tramite uno StateGraph di
 LangGraph, ovvero un tipo di grafo nel quale i nodi comunicano leggendo
@@ -867,7 +841,7 @@ e scrivendo uno stato comune \[15\], nel nostro caso chiamato
 AgentState. I componenti del sistema e le loro relazioni sono illustrati
 nel diagramma dei componenti in Figura 3.]{.mark}
 
-### [4.2.1 PlannerNode]{.mark}
+### [4.2.1 PlannerNode e prompt di sistema]{.mark}
 
 [Il PlannerNode rappresenta la componente neurale dell\'agente che
 gestisce l\'interazione diretta con l\'operatore umano, garantisce la
@@ -995,7 +969,7 @@ dall\'LLM:]{.mark}
   la conversazione conclude il turno corrente raggiungendo lo stato
   END.]{.mark}
 
-### [4.2.2 FormalGateNode]{.mark}
+### [4.2.2 FormalGateNode e verdetti]{.mark}
 
 [Il suo obiettivo è garantire, in modo deterministico, che ogni azione
 proposta dall\'LLM che modifica il sistema venga verificata rispetto
@@ -1048,7 +1022,7 @@ provengono dagli ASM:]{.mark}
   di ripiego, con l\'indicazione se il comando sia stato applicato, non
   applicato o se l\'esito sia sconosciuto.]{.mark}
 
-### [4.2.3 Instradamento dopo il Formal Gate]{.mark}
+### [4.2.3 Instradamento e stato condiviso]{.mark}
 
 [Verifica ed esecuzione avvengono entrambe nel server MCP del caso di
 studio, che applica il comando sul sistema solo dopo il verdetto degli
@@ -1079,7 +1053,7 @@ nuovo messaggio dell\'utente.]{.mark}
 
 []{.mark}
 
-## **4.3 Mappa dei protocolli e topologia di comunicazione[]{.mark}**
+## [4.3 Protocolli e livelli di comunicazione]{.mark}
 
 [L'architettura del sistema adotta una netta separazione tra i
 componenti interni di orchestrazione (eseguiti in-process all\'interno
@@ -1271,7 +1245,7 @@ server aggiunge alla descrizione di submit_plan, e un glossario dei
 codici di motivo restituiti dall\'enforcer, che il server allega al
 risultato come spiegazione in linguaggio naturale.]{.mark}
 
-## 4.6 Separazione tra motore generico e caso di studio[]{.mark}
+## [4.6 Separazione tra motore generico e casi di studio]{.mark}
 
 [Il repository è diviso in quattro parti con responsabilità
 distinte:]{.mark}
@@ -1306,7 +1280,7 @@ carica solo quelli mancanti, per non sostituire modelli eventualmente in
 uso. Al termine verifica che il servizio conservi tutti i file
 richiesti, altrimenti l\'avvio fallisce.]{.mark}
 
-# [5.]{.mark} Progettazione e implementazione del Formal Gate
+# [5. Formal Gate e protocollo di enforcement]{.mark}
 
 ## 5.1 Ruolo architetturale e filosofia di design
 
@@ -1352,7 +1326,7 @@ principi guida fondamentali:]{.mark}
   stato del sistema e di richiesta la decisione di sicurezza è
   riproducibile.]{.mark}
 
-## 5.2 Meccanismo di filtering e bypass delle azioni read-only[]{.mark}
+## [5.2 Classificazione dei tool e bypass delle azioni di sola lettura]{.mark}
 
 [Per evitare l\'overhead computazionale e lo spreco di risorse dovuto
 alla verifica formale sincrona di operazioni prive di rischi viene
@@ -1380,7 +1354,7 @@ nome fuorviante potrebbe aggirare, la classificazione si fonda su una
 dichiarazione esplicita del server, e un tool privo dell\'annotazione è
 trattato per default come potenzialmente pericoloso.]{.mark}
 
-## [5.3 Integrazione con il framework di enforcement via MCP Client]{.mark}
+## [5.3 Invio del piano al framework di enforcement]{.mark}
 
 [La verifica delle azioni avviene mediante l\'invocazione sincrona del
 server MCP del caso di studio, che contiene il framework di enforcement
@@ -1417,7 +1391,7 @@ applicando le precondizioni e le guardie definite nella specifica e
 decide se consentirla, correggerla, chiederne la ripianificazione o
 bloccarla.]{.mark}
 
-## [5.4 Algoritmo di runtime enforcement e politiche di sicurezza]{.mark}
+## [5.4 Workflow del Formal Gate e politiche di sicurezza]{.mark}
 
 []{.mark}Il ciclo di esecuzione del Formal Gate e l\'instradamento
 condizionale delle decisioni sono sintetizzati nel diagramma di workflow
