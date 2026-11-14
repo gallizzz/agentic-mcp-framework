@@ -186,8 +186,12 @@ class PillboxBinding:
         schedule = {c: state.sequence(f"time_consumption({c})") for c in self.compartments}
         # The device model defines which medication each compartment holds
         medication = {c: state.literal(f"name({c})").strip('"') for c in self.compartments}
+        # The device counts minutes across days: only the time of day is meaningful here
+        now = state.integer("pillboxSystemTime") % 1440
         return {
             "version": self.version(state),
+            "system_time": now,
+            "system_time_hhmm": hhmm(now),
             "medication": medication,
             "schedule": schedule,
             "schedule_hhmm": {c: [hhmm(t) for t in times] for c, times in schedule.items()},
