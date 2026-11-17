@@ -58,12 +58,17 @@ class EnforcementGateway:
             if self.live is not None:
                 return
             try:
+                # 1) Live device: start a session of the device model.
                 self.live = self.runtime.create(self.binding.device_model)
+                # 2) First step of the live device with the idle inputs of the binding.
                 self.last_live = self.runtime.step(self.live, self.binding.initial_inputs())
+                # 3) Setup models: one session each.
                 for name in self.binding.setup_models:
                     session = self.runtime.create(name)
                     self.setup_sessions.append(session)
                     self.runtime.step(session, self.binding.enforcer_inputs(self.last_live))
+                # 4) Enforcer: start its session and take a first step with no pending
+                #    request, so it leaves its initial phase and mirrors the live device.
                 self.enforcer = self.runtime.create(self.binding.enforcer_model)
                 self.runtime.step(self.enforcer, self.binding.enforcer_inputs(self.last_live))
             except Exception:
@@ -124,7 +129,7 @@ class EnforcementGateway:
             commit_rejected = False
             applied_action = None
             try:
-                # STEP 1 - Ask the enforcer. The snapshot (state + input history of the live
+                # 1) Ask the enforcer. The snapshot (state + input history of the live
                 # device) is what the preview later replays and what every re-check compares to.
                 snapshot = self.runtime.snapshot(self.live)
                 self.last_live = snapshot.state
@@ -134,7 +139,7 @@ class EnforcementGateway:
                 if output.request_id != command_id:
                     raise AsmError("Enforcer response belongs to another request")
 
-                # STEP 2 - Preview (only if the enforcer asked for it). The whole plan is
+                # 2) Preview (only if the enforcer asked for it). The whole plan is
                 # simulated on a twin, never on the live system; the verdict goes back to the
                 # enforcer, which then gives the final decision.
                 preview_request = output.preview_request
@@ -154,7 +159,7 @@ class EnforcementGateway:
                     state = self.runtime.step(self.enforcer, inputs)
                     output = self.binding.enforcer_output(state)
 
-                # STEP 3 - Commit (only if the enforcer authorized a command). Before sending
+                # 3) Commit (only if the enforcer authorized a command). Before sending
                 # it, every correlation is checked and the live state is verified unchanged:
                 # the command must be exactly what the ASM evaluated, on the state it evaluated.
                 command = output.command
@@ -191,7 +196,7 @@ class EnforcementGateway:
                     elif not commit_rejected:
                         raise AsmError("No matching live execution acknowledgment")
 
-                # STEP 4 - Final cross-checks: the decision must match what really happened
+                # 4) Final cross-checks: the decision must match what really happened
                 # on the live system (ALLOW/REPLACE <=> command acknowledged as applied).
                 if output.request_id != command_id:
                     raise AsmError("Final decision belongs to another request")
