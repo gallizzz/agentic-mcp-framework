@@ -74,75 +74,96 @@ ad alcuni casi di studio in ambienti simulati.
 
 [1.3 Contesto tecnologico[]{.mark}](#contesto-tecnologico) []{.mark}
 
-[[1.3.1 Dominio probabilistico: LLM, LangGraph e MCP]{.mark}](#dominio-probabilistico-llm-langgraph-e-mcp)
+[[1.3.1 Dominio probabilistico: LLM, LangGraph e
+MCP]{.mark}](#dominio-probabilistico-llm-langgraph-e-mcp) []{.mark}
 
-[[1.3.2 Dominio deterministico: ASM e ASMETA]{.mark}](#dominio-deterministico-asm-e-asmeta)
+[[1.3.2 Dominio deterministico: ASM e
+ASMETA]{.mark}](#dominio-deterministico-asm-e-asmeta) []{.mark}
 
 [[1.4 Soluzione proposta]{.mark}](#soluzione-proposta)
 
 [2. Nozioni di background](#nozioni-di-background)
 
-[[2.1 Paradigma ReAct e limiti dei vincoli nel prompt]{.mark}](#paradigma-react-e-limiti-dei-vincoli-nel-prompt)
+[2.1 Paradigma ReAct e limiti dei
+prompt](#paradigma-react-e-limiti-dei-prompt)
 
 [2.2 Framework agentici](#framework-agentici)
 
-[[2.3 Protocolli di interconnessione: MCP e A2A]{.mark}](#protocolli-di-interconnessione-mcp-e-a2a)
+[2.3 Protocolli di interconnessione: MCP e
+A2A](#protocolli-di-interconnessione-mcp-e-a2a)
 
 [2.4 Valutazione e sicurezza degli
 agenti](#valutazione-e-sicurezza-degli-agenti)
 
-[[2.5 Ragionamento neuro-simbolico e metodi formali]{.mark}](#ragionamento-neuro-simbolico-e-metodi-formali)
+[2.5 Ragionamento neuro-simbolico e metodi
+formali](#ragionamento-neuro-simbolico-e-metodi-formali)
 
-[[2.6 Feedback loop e limiti dell'auto-correzione]{.mark}](#feedback-loop-e-limiti-dellauto-correzione)
+[2.6 Feedback loop e limiti
+dell'auto-correzione](#feedback-loop-e-limiti-dellauto-correzione)
 
-[[2.7 Design pattern per agenti]{.mark}](#design-pattern-per-agenti)
+[[2.7 Agent design pattern]{.mark}](#agent-design-pattern) []{.mark}
 
-[[2.7.1 Multimodal Guardrails per l'intercettazione delle azioni]{.mark}](#multimodal-guardrails-per-lintercettazione-delle-azioni)
+[[2.7.1 Multimodal Guardrails per l'intercettazione delle
+azioni]{.mark}](#multimodal-guardrails-per-lintercettazione-delle-azioni)
+[]{.mark}
 
 [[2.7.2 Cross-Reflection per il
 re-planning]{.mark}](#cross-reflection-per-il-re-planning) []{.mark}
 
-[[2.7.3 Agent Adapter per l'interoperabilità]{.mark}](#agent-adapter-per-linteroperabilità)
+[[2.7.3 Agent Adapter per
+l'interoperabilità]{.mark}](#agent-adapter-per-linteroperabilità)
+[]{.mark}
 
 [2.8 Sistemi auto-adattativi e ciclo
 MAPE-K[]{.mark}](#sistemi-auto-adattativi-e-ciclo-mape-k) []{.mark}
 
-[[3. Idea progettuale]{.mark}](#idea-progettuale)
+[3. Idea progettuale](#idea-progettuale)
 
 [3.1 Obiettivi](#obiettivi)
 
-[[3.1.1 Runtime enforcement e I/O sanitization]{.mark}](#runtime-enforcement-e-io-sanitization)
+[3.1.1 Runtime enforcement e I/O
+sanitization](#runtime-enforcement-e-io-sanitization)
 
 [3.1.2 Gestione dello stato e controllo deterministico del
 flusso](#gestione-dello-stato-e-controllo-deterministico-del-flusso)
 
-[[3.1.3 Infrastruttura modulare basata su MCP]{.mark}](#infrastruttura-modulare-basata-su-mcp)
+[3.1.3 Infrastruttura modulare basata su
+MCP](#infrastruttura-modulare-basata-su-mcp)
 
-[[3.1.4 Accesso ai metodi formali in linguaggio naturale]{.mark}](#accesso-ai-metodi-formali-in-linguaggio-naturale)
+[3.1.4 Accesso ai metodi formali in linguaggio
+naturale](#accesso-ai-metodi-formali-in-linguaggio-naturale)
 
 [3.2 Piano d'azione](#piano-dazione)
 
-[[3.2.1 Containerizzazione e validazione dell'infrastruttura]{.mark}](#containerizzazione-e-validazione-dellinfrastruttura)
+[3.2.1 Containerizzazione e validazione
+dell\'infrastruttura](#containerizzazione-e-validazione-dellinfrastruttura)
 
-[[3.2.2 Sviluppo del framework di enforcement e del server MCP]{.mark}](#sviluppo-del-framework-di-enforcement-e-del-server-mcp)
+[3.2.2 Sviluppo del framework di enforcement e del server
+MCP](#sviluppo-del-framework-di-enforcement-e-del-server-mcp)
 
-[[3.2.3 Progettazione dei prompt]{.mark}](#progettazione-dei-prompt)
+[3.2.3 Progettazione dei prompt](#progettazione-dei-prompt)
 
 [3.2.4 Sviluppo del grafo LangGraph](#sviluppo-del-grafo-langgraph)
 
-[[4. Architettura del sistema]{.mark}](#architettura-del-sistema)
+[[4.]{.mark} Progettazione e
+implementazione](#progettazione-e-implementazione)
 
-[[4.1 Architettura neuro-simbolica a controllo gerarchico]{.mark}](#architettura-neuro-simbolica-a-controllo-gerarchico)
+[[4.1 Architettura neuro-simbolica]{.mark} a controllo
+gerarchico](#architettura-neuro-simbolica-a-controllo-gerarchico)
 
-[[4.2 Nodi del grafo LangGraph]{.mark}](#nodi-del-grafo-langgraph)
+[[4.2 Anatomia dei nodi LangGraph]{.mark}](#anatomia-dei-nodi-langgraph)
 
-[[4.2.1 PlannerNode e prompt di sistema]{.mark}](#plannernode-e-prompt-di-sistema)
+[[4.2.1 PlannerNode]{.mark} e prompt di
+sistema](#plannernode-e-prompt-di-sistema)
 
-[[4.2.2 FormalGateNode e verdetti]{.mark}](#formalgatenode-e-verdetti)
+[[4.2.2 FormalGateNode]{.mark} e verdetti](#formalgatenode-e-verdetti)
 
-[[4.2.3 Instradamento e stato condiviso]{.mark}](#instradamento-e-stato-condiviso)
+[[4.2.3 Instradamento e stato
+condiviso]{.mark}](#instradamento-e-stato-condiviso)
 
-[[4.3 Protocolli e livelli di comunicazione]{.mark}](#protocolli-e-livelli-di-comunicazione)
+[4.3 Protocolli e livelli di
+comunicazione[]{.mark}](#protocolli-e-livelli-di-comunicazione)
+[]{.mark}
 
 [4.4 Ciclo di esecuzione e schema
 enforcement[]{.mark}](#ciclo-di-esecuzione-e-schema-enforcement)
@@ -151,18 +172,27 @@ enforcement[]{.mark}](#ciclo-di-esecuzione-e-schema-enforcement)
 [4.5 Framework di enforcement[]{.mark}](#framework-di-enforcement)
 []{.mark}
 
-[[4.6 Separazione tra motore generico e casi di studio]{.mark}](#separazione-tra-motore-generico-e-casi-di-studio)
+[4.6 Separazione tra motore generico e casi di
+studio[]{.mark}](#separazione-tra-motore-generico-e-casi-di-studio)
+[]{.mark}
 
-[[5. Formal Gate e protocollo di enforcement]{.mark}](#formal-gate-e-protocollo-di-enforcement)
+[[5.]{.mark} Formal Gate e protocollo di
+enforcement](#formal-gate-e-protocollo-di-enforcement)
 
 [5.1 Ruolo architetturale e filosofia di
 design](#ruolo-architetturale-e-filosofia-di-design)
 
-[[5.2 Classificazione dei tool e bypass delle azioni di sola lettura]{.mark}](#classificazione-dei-tool-e-bypass-delle-azioni-di-sola-lettura)
+[5.2 Classificazione dei tool e bypass delle azioni di sola
+lettura[]{.mark}](#classificazione-dei-tool-e-bypass-delle-azioni-di-sola-lettura)
+[]{.mark}
 
-[[5.3 Invio del piano al framework di enforcement]{.mark}](#invio-del-piano-al-framework-di-enforcement)
+[[5.3 Invio del piano al framework di
+enforcement]{.mark}](#invio-del-piano-al-framework-di-enforcement)
+[]{.mark}
 
-[[5.4 Workflow del Formal Gate e politiche di sicurezza]{.mark}](#workflow-del-formal-gate-e-politiche-di-sicurezza)
+[[5.4 Workflow del Formal Gate e politiche di
+sicurezza]{.mark}](#workflow-del-formal-gate-e-politiche-di-sicurezza)
+[]{.mark}
 
 [[5.5 Preview su gemello e commit con
 conferma]{.mark}](#preview-su-gemello-e-commit-con-conferma) []{.mark}
@@ -192,7 +222,9 @@ linguistico]{.mark}](#scelta-del-modello-linguistico) []{.mark}
 
 [7.3 Sviluppi futuri](#sviluppi-futuri)
 
-[8. Bibliografia](#bibliografia)
+[Bibliografia](#bibliografia)
+
+[Ringraziamenti](#ringraziamenti)
 
 []{.mark}
 
@@ -216,9 +248,13 @@ definiscono il comportamento previsto, gli agenti LLM operano senza una
 specifica in quanto non esiste modo di verificare le loro azioni prima
 dell\'esecuzione.
 
-Le misure di sicurezza esistenti si basano sulla valutazione a
-posteriori, ma questo li rende inadatti a sistemi critici dove le
-conseguenze di malfunzionamenti possono essere catastrofiche.[]{.mark}
+In questa tesi il termine safety indica la proprietà di un sistema di
+non causare danni a persone, beni o ambiente, cioè il rispetto dei
+vincoli che impediscono stati o azioni pericolose; non riguarda invece
+la security, cioè la protezione da attacchi o accessi non autorizzati.
+Le misure di safety esistenti si basano sulla valutazione a posteriori,
+e questo le rende inadatte a sistemi critici, dove le conseguenze di
+malfunzionamenti possono essere catastrofiche.[]{.mark}
 
 [Un episodio emblematico della gravità di tali rischi è rappresentato
 dal caso documentato della piattaforma di sviluppo AI Replit \[12\]:
@@ -346,11 +382,15 @@ Figura 1: Architettura di MCP. Fonte:
 
 ### [1.3.2 Dominio deterministico: ASM e ASMETA]{.mark}
 
-Le Abstract State Machines (ASM) sono un metodo formale basato sulla
-matematica per la specifica e la verifica di sistemi complessi. A
-differenza degli LLM che sono probabilistici, le ASM sono rigorosamente
-deterministiche: partendo da uno stato iniziale e applicando regole in
-base a determinati input, la macchina transita verso uno stato
+Le Abstract State Machines (ASM) sono un metodo formale per la specifica
+di sistemi complessi. Possono essere viste come un'estensione delle
+macchine a stati finiti in cui gli stati di controllo non strutturati
+sono sostituiti da stati capaci di contenere dati arbitrariamente
+complessi, rappresentati tramite funzioni dinamiche; le regole di
+transizione di base consistono in aggiornamenti di funzioni condizionati
+da guardie ed eseguiti in parallelo \[29\]. A differenza degli LLM, che
+sono probabilistici, le ASM sono deterministiche: a partire da uno stato
+e da determinati input, l'applicazione delle regole porta a uno stato
 successivo calcolabile e prevedibile.
 
 Per rendere le ASM utilizzabili a livello pratico, è stato sviluppato il
@@ -366,7 +406,7 @@ non valida rispetto alle regole formali scritte nel modello
 \[1\].[]{.mark}
 
 [Il simulatore può essere esposto come servizio tramite API REST
-(AsmetaS\\@run.time), modalità con cui i modelli ASM vengono eseguiti a
+(AsmetaS@run.time), modalità con cui i modelli ASM vengono eseguiti a
 runtime all\'interno del framework di enforcement \[21\].]{.mark}
 
 Nell'ambito di questo progetto AsmetaS rappresenta lo strumento (non-AI)
@@ -402,7 +442,7 @@ contenuta in un repository GitHub \[17\].]{.mark}
 
 # 2. Nozioni di background
 
-## [2.1 Paradigma ReAct e limiti dei vincoli nel prompt]{.mark}
+## 2.1 Paradigma ReAct e limiti dei prompt
 
 L'evoluzione degli LLM sta cambiando il modo in cui questi vengono
 utilizzati, passando da interfacce conversazionali ad agenti autonomi
@@ -433,7 +473,7 @@ eseguire operazioni distruttive o irreversibili sull\'ambiente esterno.
 La ricerca evidenzia quindi la necessità di introdurre una verifica
 runtime basata sull'intercettazione delle azioni candidate proposte
 dall\'agente prima che raggiungano i tool esecutivi, verificando il
-soddisfacimento di pre condizioni e vincoli di conformità tramite motori
+soddisfacimento di precondizioni e vincoli di conformità tramite motori
 logici e restituendo feedback correttivi per guidare l\'agente verso
 un\'auto-correzione sicura \[3\].
 
@@ -456,7 +496,7 @@ conversano e agiscono per risolvere task complessi, supportando
 nativamente l\'esecuzione di codice e cicli di feedback strutturati
 \[4\].
 
-## [2.3 Protocolli di interconnessione: MCP e A2A]{.mark}
+## 2.3 Protocolli di interconnessione: MCP e A2A
 
 Il panorama dei framework agentici presenta principalmente due
 dimensioni di interconnessione \[5\]:
@@ -507,7 +547,7 @@ effettivamente interessato. Questo episodio mette in risalto la
 necessità di soluzioni che siano in grado di valutare e porre delle
 barriere alle azioni che questi framework agentici possono eseguire.
 
-## [2.5 Ragionamento neuro-simbolico e metodi formali]{.mark}
+## 2.5 Ragionamento neuro-simbolico e metodi formali
 
 Negli ultimi anni la ricerca ha iniziato ad utilizzare approcci
 neuro-simbolici per superare la mancanza di affidabilità deduttiva degli
@@ -518,13 +558,13 @@ formale delle macchine.
 
 In questo specifico ambito, la ricerca sta muovendo i primi passi
 nell'integrazione di LLM all'interno del framework ASMETA, per assistere
-l'utente nella traduzione di requisiti dal linguaggio
-colloquiale.Tuttavia, l\'attuale letteratura si concentra su
-integrazioni custom o specificamente addestrate. L\'utilizzo di
-framework architetturali a grafo (come LangGraph) combinati a protocolli
-di standardizzazione universale (come MCP) per orchestrare la
-comunicazione tra l\'agente AI e il motore formale (AsmetaS),
-rappresenta un\'area applicativa ancora inesplorata \[8\] \[9\] \[10\].
+l'utente nella traduzione di requisiti dal linguaggio colloquiale
+\[10\]. Tuttavia, l\'attuale letteratura si concentra su integrazioni
+custom o specificamente addestrate. L\'utilizzo di framework
+architetturali a grafo (come LangGraph) combinati a protocolli di
+standardizzazione universale (come MCP) per orchestrare la comunicazione
+tra l\'agente AI e il motore formale (AsmetaS), rappresenta un\'area
+applicativa ancora inesplorata \[8\] \[9\].
 
 In questo contesto il modello ad Abstract State Machine diviene un
 controllore attivo di I/O sanitization che presidia le comunicazioni,
@@ -532,7 +572,7 @@ intercettando ogni singola proposta di transizione e assicurando
 l\'inviolabilità degli invarianti di sistema prima di abilitare
 l\'attuazione fisica.
 
-## [2.6 Feedback loop e limiti dell'auto-correzione]{.mark}
+## 2.6 Feedback loop e limiti dell'auto-correzione
 
 Indagini sull\'uso di feedback loop per la generazione guidata di codice
 hanno dimostrato che restituire all\'agente gli errori e gli avvisi
@@ -551,7 +591,7 @@ limiti di iterazione. Questo impedirà che il sistema continui a iterare
 a vuoto una volta raggiunto il limite di inefficacia documentato dalla
 ricerca \[11\].
 
-## [2.7 Design pattern per agenti]{.mark}
+## [2.7 Agent design pattern]{.mark}
 
 [La progettazione di sistemi complessi basati su modelli linguistici ha
 portato alla formalizzazione di specifici Agent Design Patterns volti a
@@ -611,14 +651,36 @@ riferimento architetturale più diffuso per questa logica è il ciclo
 MAPE-K \[19\], che separa quattro attività (Monitor, Analyze, Plan,
 Execute) operanti su una base di conoscenza condivisa (Knowledge): il
 sistema viene osservato, lo stato osservato viene analizzato rispetto ai
-requisiti, si pianifica un intervento e lo si attua.]{.mark}
+requisiti, si pianifica un intervento e lo si attua (Figura 3).]{.mark}
 
-[Il runtime enforcement si presta naturalmente a questa struttura: il
-monitoraggio intercetta le azioni e osserva lo stato del sistema,
-l\'analisi verifica le proprietà di sicurezza, la pianificazione calcola
-un\'eventuale correzione e l\'esecuzione la applica. Il framework RSE
-\[18\] segue questo schema, usando modelli ASM eseguiti a runtime come
-conoscenza del ciclo.]{.mark}
+[]{.mark}
+
+[]{.mark}
+
+Figura 3: Struttura di un elemento autonomico e ciclo MAPE-K. Fonte:
+\[19\].
+
+[]{.mark}
+
+[Il Runtime Safety Enforcement (RSE) si presta naturalmente a questa
+struttura: il monitoraggio intercetta le azioni e osserva lo stato del
+sistema, l\'analisi verifica le proprietà di sicurezza, la
+pianificazione calcola un\'eventuale correzione e l\'esecuzione la
+applica. Il framework RSE \[18\] segue questo schema, usando modelli ASM
+eseguiti a runtime come conoscenza del ciclo.]{.mark}
+
+[L'approccio RSE è stato applicato, ad esempio, alla guida autonoma su
+un'autostrada simulata \[29\]: l'enforcer agisce come safety shield
+attorno a un agente di guida basato su IA, trattato come scatola nera, e
+sostituisce le azioni che porterebbero a uno stato non sicuro con azioni
+corrette (output sanitization), calcolate da un modello ASM eseguito a
+runtime tramite AsmetaS@run.time. Gli autori articolano l'approccio in
+cinque passi: definizione delle strategie di enforcement, specifica e
+analisi formale del modello, sviluppo del framework e binding al sistema
+controllato, deployment, ed evoluzione del modello a runtime \[29\]. Il
+contesto di questa tesi è analogo, con un agente LLM al posto
+dell'agente di guida e un piano di tool call al posto della singola
+azione di controllo.]{.mark}
 
 [Quando più obiettivi di adattamento devono convivere, Weyns et al.
 \[20\] descrivono il pattern Hierarchical Control, in cui cicli di
@@ -627,13 +689,14 @@ cicli di livello superiore ragionano su aspetti via via più ampi del
 sistema. Nell\'architettura proposta questo pattern si concretizza in
 due livelli: il ciclo inferiore è il framework di enforcement, che
 preserva i vincoli di sicurezza, mentre il ciclo superiore è l\'agente
-LLM, che persegue gli obiettivi dell\'utente (sezione 4.1).]{.mark}
+LLM, che persegue gli obiettivi dell\'utente (sezione 4.1, Figura
+4).]{.mark}
 
-# [3. Idea progettuale]{.mark}
+# 3. Idea progettuale
 
 ## 3.1 Obiettivi
 
-### [3.1.1 Runtime enforcement e I/O sanitization]{.mark}
+### 3.1.1 Runtime enforcement e I/O sanitization
 
 Gli LLM sono per loro natura probabilistici e vulnerabili ad
 allucinazioni, faticano nel mantenere coerenza logica in sistemi
@@ -661,7 +724,7 @@ flusso di controllo è regolato da edge condizionali deterministici:
   impedisce l\'esecuzione e devia il flusso verso il nodo di
   pianificazione, innescando un ciclo di retroazione.
 
-### [3.1.3 Infrastruttura modulare basata su MCP]{.mark}
+### 3.1.3 Infrastruttura modulare basata su MCP
 
 Invece di scrivere codice custom che lega indissolubilmente un LLM
 specifico al web service AsmetaS, si strutturerà il sistema secondo le
@@ -688,7 +751,7 @@ invocare la sanitizzazione delle azioni con una latenza minima e una
 struttura snella, evitando l\'overhead informatico e la complessità di
 gestione di contratti di rete A2A.]{.mark}
 
-### [3.1.4 Accesso ai metodi formali in linguaggio naturale]{.mark}
+### 3.1.4 Accesso ai metodi formali in linguaggio naturale
 
 La comprensione e l'utilizzo delle Abstract State Machines non sono
 immediati, necessitano di esperienza nel campo della logica formale e
@@ -705,7 +768,7 @@ modello sottostante.
 
 ## 3.2 Piano d'azione
 
-### [3.2.1 Containerizzazione e validazione dell'infrastruttura]{.mark}
+### 3.2.1 Containerizzazione e validazione dell\'infrastruttura
 
 La prima fase del progetto è dedicata all\'allestimento di un ambiente
 di sviluppo isolato e riproducibile attraverso Docker:
@@ -717,10 +780,10 @@ di sviluppo isolato e riproducibile attraverso Docker:
 - Verifica preliminare del canale di comunicazione MCP partendo da tool
   prototipali di test per poi validare l\'integrazione di server MCP
   operanti su API REST esterne. Questa fase garantisce la corretta
-  gestione del protocolli e il recupero dinamico degli schemi da parte
+  gestione dei protocolli e il recupero dinamico degli schemi da parte
   dell\'MCP Client.
 
-### [3.2.2 Sviluppo del framework di enforcement e del server MCP]{.mark}
+### 3.2.2 Sviluppo del framework di enforcement e del server MCP
 
 La seconda fase prevede il wrapping del motore formale:[]{.mark}
 
@@ -740,29 +803,37 @@ La seconda fase prevede il wrapping del motore formale:[]{.mark}
 
 - [Definizione dello Schema Enforcement (Pydantic): modellazione del
   contratto di comunicazione tra il Formal Gate e il server MCP tramite
-  classi Pydantic (Plan e Action). Questo assicura che i piani proposti
-  dall\'agente rispettino tassativamente la struttura attesa prima di
-  raggiungere i modelli ASM, e che le risposte appartengano alla
-  tassonomia delle decisioni (ALLOW, REPLACE, REPLAN, BLOCK).]{.mark}
+  classi Pydantic (Plan e Action). Pydantic è una libreria Python per la
+  validazione dei dati: una classe che estende BaseModel dichiara i
+  propri campi con i tipi Python e, quando viene istanziata, la libreria
+  controlla a runtime che i dati ricevuti rispettino tipi e vincoli,
+  sollevando un errore in caso contrario \[28\]. Questo assicura che i
+  piani proposti dall\'agente rispettino tassativamente la struttura
+  attesa prima di raggiungere i modelli ASM, e che le risposte
+  appartengano alla tassonomia delle decisioni (ALLOW, REPLACE, REPLAN,
+  BLOCK).]{.mark}
 
-### [3.2.3 Progettazione dei prompt]{.mark}
+### 3.2.3 Progettazione dei prompt
 
-Sarà necessario istruire l'agente proponente tramite prompt per il suo
+È necessario istruire l'agente proponente tramite prompt per il suo
 ruolo di "traduttore" dell'intento espresso in linguaggio colloquiale
-dall'utente in una proposta formale per l'ASM. Dovrà essere in grado di
+dall'utente in una proposta formale per l'ASM. Deve essere in grado di
 mappare le richieste fornite dall'utente trasformandole in requisiti
 tecnici validi da passare al motore formale e di interpretare l'output
-dello stesso per renderlo comprensibile all'utente.
+dello stesso per renderlo comprensibile all'utente.[]{.mark}
 
-Il prompt non dovrà essere considerato un meccanismo di sicurezza: un
-vincolo espresso solo in linguaggio naturale può essere ignorato dal
-modello, quindi la garanzia di correttezza resterà affidata al Formal
-Gate e ai modelli ASM. Al prompt spetterà il compito di ridurre gli
-errori che non compromettono la sicurezza ma l'efficacia dell'agente,
-come piani incompleti o resoconti non fedeli dell'esito della verifica.
-Per mantenere il motore indipendente dal dominio, le istruzioni saranno
-divise in una parte generica, valida per qualunque caso di studio, e in
-una parte di dominio fornita dal caso di studio stesso.
+[Il prompt non deve essere considerato un meccanismo di sicurezza in
+quanto un vincolo espresso solo in linguaggio naturale può essere
+ignorato dal]{.mark} [modello, quindi la garanzia di correttezza resterà
+affidata al Formal]{.mark} [Gate e ai modelli ASM. Al prompt spetta il
+compito di ridurre gli]{.mark} [errori che non compromettono la
+sicurezza ma l\'efficacia dell\'agente,]{.mark} [come piani incompleti o
+resoconti non fedeli dell\'esito della verifica.]{.mark} []{.mark}
+
+[Per mantenere il motore indipendente dal dominio, le istruzioni devono
+essere divise in una parte generica, valida per qualunque caso di
+studio, e in una parte di dominio fornita dal caso di studio
+stesso.]{.mark}
 
 ### 3.2.4 Sviluppo del grafo LangGraph
 
@@ -774,10 +845,10 @@ rigidi e non scavalcabili dal prompt:
   candidata nello stato del grafo, privo di accesso diretto agli
   attuatori reali.
 
-Nodo Cancello Formale (Deterministic Gate): Funzione Python pura (senza
-LLM) che intercetta la proposta, la invia al server MCP del caso di
-studio, che la verifica con i modelli ASM e la esegue, e registra nello
-stato l\'esito della verifica formale.
+- Nodo Cancello Formale (Formal Gate): Funzione Python pura (senza LLM)
+  che intercetta la proposta, la invia al server MCP del caso di studio,
+  che la verifica con i modelli ASM e la esegue, e registra nello stato
+  l\'esito della verifica formale.
 
 - Archi condizionali in uscita dal gate:
 
@@ -793,9 +864,9 @@ stato l\'esito della verifica formale.
     proponente può solo formulare la risposta finale, riportando gli
     esiti reali e le azioni non eseguite.
 
-# [4. Architettura del sistema]{.mark}
+# [4.]{.mark} Progettazione e implementazione
 
-## [4.1 Architettura neuro-simbolica a controllo gerarchico]{.mark}
+## [4.1 Architettura neuro-simbolica]{.mark} a controllo gerarchico
 
 Nelle applicazioni mission-critical (guida autonoma, robotica medica,
 sistemi industriali), l\'attuazione diretta da parte di un LLM è
@@ -827,28 +898,46 @@ livelli \[20\]]{.mark}:[]{.mark}
   piano e, in base alla decisione dell\'enforcement, prosegue con il
   piano, accetta la correzione oppure ripianifica.]{.mark}
 
+> []{.mark}
+
+[]{.mark}
+
+Figura 4: Architettura di enforcement proposta, applicata al sistema di
+assistenza alla terapia basato su LLM.
+
+[]{.mark}
+
+[La Figura 4 mostra l'architettura complessiva. Le azioni proposte
+dall'agente passano sempre dall'Enforcement Gateway, e anche gli
+aggiornamenti sul sistema reale restano soggetti all'enforcement a
+runtime. Quando l'enforcer corregge un'azione, la correzione e il piano
+residuo possono essere simulati su un'istanza ASM isolata, che fa da
+gemello digitale controfattuale del sistema. Se la simulazione rileva un
+conflitto, l'agente ripianifica e le azioni riviste rientrano nel
+Gateway.]{.mark}
+
 [La separazione delle responsabilità è netta: l\'enforcement preserva i
 vincoli di sicurezza modellati, mentre il raggiungimento degli obiettivi
 dell\'utente resta compito del Planner. L\'agente non è mai autorizzato
 a modificare i parametri di sicurezza del sistema: può soltanto proporre
 azioni, che vengono comunque verificate.]{.mark}
 
-## [4.2 Nodi del grafo LangGraph]{.mark}
+## [4.2 Anatomia dei nodi LangGraph]{.mark}
 
 [L\'applicazione modella il ciclo decisionale tramite uno StateGraph di
 LangGraph, ovvero un tipo di grafo nel quale i nodi comunicano leggendo
 e scrivendo uno stato comune \[15\], nel nostro caso chiamato
 AgentState. I componenti del sistema e le loro relazioni sono illustrati
-nel diagramma dei componenti in Figura 3.]{.mark}
+nel diagramma dei componenti in Figura 5.]{.mark}
 
-### [4.2.1 PlannerNode e prompt di sistema]{.mark}
+### [4.2.1 PlannerNode]{.mark} e prompt di sistema
 
 [Il PlannerNode rappresenta la componente neurale dell\'agente che
 gestisce l\'interazione diretta con l\'operatore umano, garantisce la
 continuità del contesto e formula le proposte d\'azione. È l\'unico nodo
-del grafo che comunica con l\'LLM, ma non esegue mai alcun tool: si
-limita a produrre richieste di esecuzione, che l\'instradamento consegna
-al FormalGateNode.]{.mark}
+del grafo che comunica con l\'LLM, ma non esegue mai alcun tool, al
+contrario si limita a produrre richieste di esecuzione, che
+l\'instradamento consegna al FormalGateNode.]{.mark}
 
 [Poiché il nodo non contiene logica di dominio e non decide nulla
 sull\'esecuzione delle azioni, l\'unico strumento con cui orientare il
@@ -862,11 +951,13 @@ azioni resta garantita dagli ASM.]{.mark}
 generico, contenuto nel file core/planner_prompt.md, che non fa
 riferimento ad alcun dominio ed è uguale per ogni caso di studio. La
 seconda sono le istruzioni di dominio (planner_hints) fornite dal caso
-di studio, che il nodo aggiunge in coda sotto un\'intestazione dedicata.
-Il prompt non elenca i tool: l\'LLM ne riceve nomi, descrizioni e schemi
-dei parametri attraverso il meccanismo di binding dei tool di LangChain
-(bind_tools), a partire da quelli scoperti tramite MCP. Le azioni
-ammesse e il significato degli obiettivi arrivano quindi dalla
+di studio, che il nodo aggiunge in coda sotto un\'intestazione
+dedicata.]{.mark}
+
+[Il prompt non elenca i tool: l\'LLM ne riceve nomi, descrizioni e
+schemi dei parametri attraverso il meccanismo di binding dei tool di
+LangChain (bind_tools), a partire da quelli scoperti tramite MCP. Le
+azioni ammesse e il significato degli obiettivi arrivano quindi dalla
 descrizione di submit_plan, costruita dal binding del caso di studio, e
 il significato dei motivi di rifiuto dal campo reason_explanation dei
 risultati del server.]{.mark}
@@ -876,71 +967,72 @@ un sistema critico, le cui azioni sono controllate da un enforcer
 formale, e fissa alcune regole, ognuna delle quali previene un
 comportamento indesiderato del modello:]{.mark}
 
-1. [Uso dei soli tool: il modello agisce solo tramite i tool
-   disponibili, rispettandone gli schemi. Se una richiesta non è
-   esprimibile con essi, deve dichiararla non supportata invece di
-   sostituirla con un\'azione dall\'effetto diverso.]{.mark}
+1.  [Uso dei soli tool: il modello agisce solo tramite i tool
+    disponibili, rispettandone gli schemi. Se una richiesta non è
+    esprimibile con essi, deve dichiararla non supportata invece di
+    sostituirla con un\'azione dall\'effetto diverso.]{.mark}
 
-2. [Lettura dello stato: prima di agire il modello legge lo stato con un
-   tool di sola lettura, perché le letture precedenti nella
-   conversazione potrebbero non essere più attuali. In questo modo il
-   piano parte dalla versione corrente dello stato e non viene
-   rifiutato perché obsoleto.]{.mark}
+2.  [Lettura dello stato: prima di agire il modello legge lo stato con
+    un tool di sola lettura, perché le letture precedenti nella
+    conversazione potrebbero non essere più attuali. In questo modo il
+    piano parte dalla versione corrente dello stato e non viene
+    rifiutato perché obsoleto.]{.mark}
 
-3. [Piano completo: ogni risposta contiene al più una chiamata a tool,
-   ma tutte le azioni richieste vanno inserite, in ordine, in un unico
-   submit_plan; sarà il Formal Gate a indicare quali restano da
-   eseguire. La regola evita che il modello perda le azioni successive
-   alla prima o chieda di nuovo all\'utente dati già forniti.]{.mark}
+3.  [Piano completo: ogni risposta contiene al più una chiamata a tool,
+    ma tutte le azioni richieste vanno inserite, in ordine, in un unico
+    submit_plan; sarà il Formal Gate a indicare quali restano da
+    eseguire. La regola evita che il modello perda le azioni successive
+    alla prima o chieda di nuovo all\'utente dati già forniti.]{.mark}
 
-4. [Verdetti: ogni risultato inizia con il verdetto del Formal Gate, che
-   è l\'unica fonte da usare per descriverlo. La regola spiega il
-   significato di ALLOW, REPLACE, REPLAN e BLOCK e vieta di dedurre
-   interventi non riportati o di scrivere i marcatori nelle risposte.
-   Impedisce, per esempio, di presentare come riuscita un\'azione
-   sostituita, o di attribuire al gate un intervento quando l\'esito è
-   ALLOW ma lo stato risultante sembra al modello sfavorevole.]{.mark}
+4.  [Verdetti: ogni risultato inizia con il verdetto del Formal Gate,
+    che è l\'unica fonte da usare per descriverlo. La regola spiega il
+    significato di ALLOW, REPLACE, REPLAN e BLOCK e vieta di dedurre
+    interventi non riportati o di scrivere i marcatori nelle risposte.
+    Impedisce, per esempio, di presentare come riuscita un\'azione
+    sostituita, o di attribuire al gate un intervento quando l'esito è
+    ALLOW ma lo stato risultante sembra al modello sfavorevole.]{.mark}
 
-5. [Motivi: un rifiuto va spiegato solo attraverso la sua
-   reason_explanation, con parole proprie, senza mostrare all\'utente
-   codici di motivo o nomi dei verdetti e senza aggiungere cause non
-   dichiarate. Le regole di sicurezza sono decise dagli ASM: il modello
-   non deve inventare limiti o vincoli.]{.mark}
+5.  [Motivi: un rifiuto va spiegato solo attraverso la sua
+    reason_explanation, con parole proprie, senza mostrare all\'utente
+    codici di motivo o nomi dei verdetti e senza aggiungere cause non
+    dichiarate. Le regole di sicurezza sono decise dagli ASM: il modello
+    non deve inventare limiti o vincoli.]{.mark}
 
-6. [Anti-loop: il modello non ripete un\'azione già eseguita nel turno e
-   riporta l\'esito reale anche quando il sistema era già nello stato
-   richiesto.]{.mark}
+6.  [Anti-loop: il modello non ripete un\'azione già eseguita nel turno
+    e riporta l\'esito reale anche quando il sistema era già nello stato
+    richiesto.]{.mark}
 
 [Il prompt si chiude chiedendo di rispondere nella lingua dell\'utente,
-in modo conciso e professionale. Le regole sono scritte in inglese,
-come le descrizioni dei tool e le istruzioni di dominio.]{.mark}
+in modo conciso e professionale. Le regole sono scritte in inglese, come
+le descrizioni dei tool e le istruzioni di dominio.]{.mark}
 
 [Alcune istruzioni non stanno nel prompt, ma vengono aggiunte dal Formal
 Gate al risultato del tool nel momento in cui servono. Quando un piano
 viene rifiutato prima di raggiungere gli ASM per un errore di schema o
 di binding, il risultato chiede di correggere solo il formato, senza
-eliminare azioni o vincoli indicati dall\'utente pur di superare la
-validazione; dopo un BLOCK chiede di spiegare il motivo e che cosa
-l\'utente potrebbe cambiare nella richiesta. In questo modo
-l\'istruzione arriva insieme al caso a cui si applica, senza appesantire
-il prompt con regole che valgono solo in situazioni particolari.]{.mark}
+eliminare azioni o vincoli indicati dall\'utente pur di superare
+la]{.mark} [validazione; dopo un BLOCK chiede di spiegare il motivo e
+che cosa]{.mark} [l\'utente potrebbe cambiare nella richiesta. In questo
+modo l\'istruzione arriva insieme al caso a cui si applica, senza
+appesantire il prompt con regole che valgono solo in situazioni
+particolari.]{.mark}
 
 [Il prompt è stato sviluppato in modo iterativo, guidato dagli scenari.
 Per ogni scenario (M1, M2-A, M2-B, M2-C e le prove aggiuntive descritte
 nella Sezione 6.5) l\'esito atteso era fissato in anticipo: la decisione
 del Formal Gate, le azioni eseguite sul sistema e ciò che il Planner
-deve riferire all\'utente. Lo scenario veniva eseguito in chat e, quando
-il comportamento del Planner si discostava da quello atteso, si
-individuava la causa e si interveniva sul livello più adatto: una regola
-del prompt generico se l\'errore non dipendeva dal dominio;
+deve riferire all\'utente. Lo scenario veniva eseguito in chat e,
+quando]{.mark} [il comportamento del Planner si discostava da quello
+atteso, si individuava la causa e si interveniva sul livello più adatto:
+una regola del prompt generico se l\'errore non dipendeva dal dominio;
 un\'istruzione di dominio, la descrizione di submit_plan o la
 spiegazione di un codice di motivo se riguardava il caso di studio;
 un\'istruzione nel risultato del Formal Gate se riguardava una sola
 situazione. Dopo ogni modifica gli scenari venivano rieseguiti, per
 verificare che la correzione non alterasse i casi che già funzionavano.
 Per esempio, dopo un rifiuto con motivo PREVIEW_CONFLICT_REASON il
-Planner tendeva a reinviare solo la prima azione del piano pur di
-farla accettare. Il comportamento è stato corretto chiarendo, nella
+Planner tendeva a reinviare solo la prima azione del piano pur di farla
+accettare. Il comportamento è stato corretto chiarendo, nella
 spiegazione del motivo, che un\'esecuzione parziale non soddisfa la
 richiesta dell\'utente e, nel prompt, che le azioni del piano non vanno
 mai eliminate.]{.mark}
@@ -952,10 +1044,10 @@ scenari sono test di accettazione eseguiti manualmente e non test
 automatici, e stabilire se la risposta del Planner è corretta richiede
 un giudizio umano. Inoltre l\'LLM non è deterministico: uno scenario
 superato una volta può dare un esito diverso in un\'esecuzione
-successiva, come mostra il caso di riferimento ambiguo in M2-B. Un
-esito positivo indica quindi che il prompt orienta il modello verso il
-comportamento voluto, non che questo sia garantito; la garanzia, per le
-azioni sul sistema, resta compito del Formal Gate.]{.mark}
+successiva. Un esito positivo indica quindi che il prompt orienta il
+modello verso il comportamento voluto, non che questo sia garantito; la
+garanzia, per le azioni sul sistema, resta compito del Formal
+Gate.]{.mark}
 
 [Il flusso in uscita dal nodo è regolato dalla funzione di instradamento
 condizionale planner_router. Quest\'ultima ispeziona l\'output generato
@@ -969,7 +1061,7 @@ dall\'LLM:]{.mark}
   la conversazione conclude il turno corrente raggiungendo lo stato
   END.]{.mark}
 
-### [4.2.2 FormalGateNode e verdetti]{.mark}
+### [4.2.2 FormalGateNode]{.mark} e verdetti
 
 [Il suo obiettivo è garantire, in modo deterministico, che ogni azione
 proposta dall\'LLM che modifica il sistema venga verificata rispetto
@@ -978,12 +1070,12 @@ AsmetaS, prima di raggiungere il sistema. La verifica vera e propria non
 avviene nel nodo, ma nel server MCP del caso di studio, che contiene il
 framework di enforcement.]{.mark}
 
-[Un punto a cui si è data particolare attenzione durante progettazione
-di questo nodo è la sua agnosticità rispetto al dominio applicativo,
-poiché il codice non doveva contenere assunzioni o stringhe rigide
-legate a uno specifico contesto: i tool vengono scoperti tramite MCP e
-gli unici nomi noti al nodo sono quelli del contratto con il server
-(submit_plan e get_system_state), definiti in un modulo condiviso
+[Un punto a cui si è data particolare attenzione durante la
+progettazione di questo nodo è la sua agnosticità rispetto al dominio
+applicativo, poiché il codice non doveva contenere assunzioni o stringhe
+rigide legate a uno specifico contesto: i tool vengono scoperti tramite
+MCP e gli unici nomi noti al nodo sono quelli del contratto con il
+server (submit_plan e get_system_state), definiti in un modulo condiviso
 (contracts.py).]{.mark}
 
 [Il nodo integra un meccanismo di bypass grazie al quale i tool che
@@ -1048,12 +1140,12 @@ nuovo messaggio dell\'utente.]{.mark}
 
 []{.mark}
 
-[Figura 3: Diagramma dei componenti. Realizzato con
+[Figura 5: Diagramma dei componenti. Realizzato con
 [draw.io](https://app.diagrams.net).]{.mark}
 
 []{.mark}
 
-## [4.3 Protocolli e livelli di comunicazione]{.mark}
+## **4.3 Protocolli e livelli di comunicazione[]{.mark}**
 
 [L'architettura del sistema adotta una netta separazione tra i
 componenti interni di orchestrazione (eseguiti in-process all\'interno
@@ -1159,6 +1251,47 @@ un flusso in tre fasi distinte:]{.mark}
   - [In caso di errore operativo: il turno termina senza azioni di
     ripiego.]{.mark}
 
+[Il percorso di una richiesta di modifica attraverso i moduli del
+progetto (sezione 4.6) è il seguente:]{.mark}
+
+  -----------------------------------------------------------------------------------------------------------------------
+  [Passo]{.mark}   [Componente]{.mark}       [Cosa fa]{.mark}              [File]{.mark}
+  ---------------- ------------------------- ----------------------------- ----------------------------------------------
+  [1]{.mark}       [PlannerNode]{.mark}      [L'LLM interpreta la          [core/planner_node.py]{.mark}
+                                             richiesta e propone un piano  
+                                             tramite il tool               
+                                             submit_plan]{.mark}           
+
+  [2]{.mark}       [FormalGateNode]{.mark}   [Invia il piano al server MCP [core/formal_gate_node.py]{.mark}
+                                             via stdio]{.mark}             
+
+  [3]{.mark}       [MCP Facade]{.mark}       [Riceve la chiamata           [enforcement/mcp_facade.py]{.mark}
+                                             submit_plan e la passa al     
+                                             gateway]{.mark}               
+
+  [4]{.mark}       [Gateway]{.mark}          [Fa valutare il piano         [enforcement/gateway.py]{.mark}
+                                             all'enforcer ASM, che         
+                                             restituisce una               
+                                             decisione]{.mark}             
+
+  [5]{.mark}       [Preview                  [Se l'enforcer propone una    [enforcement/preview_orchestrator.py]{.mark}
+                   Orchestrator]{.mark}      correzione, la simula sul     
+                                             gemello insieme al resto del  
+                                             piano]{.mark}                 
+
+  [6]{.mark}       [Runtime ASM]{.mark}      [Se la decisione lo consente, [enforcement/asm_runtime.py]{.mark}
+                                             applica il comando al sistema 
+                                             live e attende la conferma    
+                                             (ACK)]{.mark}                 
+
+  [7]{.mark}       [PlannerNode]{.mark}      [Riceve la decisione (ALLOW,  [core/planner_node.py]{.mark}
+                                             REPLACE, REPLAN o BLOCK) e    
+                                             scrive la risposta            
+                                             all'utente]{.mark}            
+  -----------------------------------------------------------------------------------------------------------------------
+
+[]{.mark}
+
 [La sola presenza di interfacce JSON-RPC via MCP non garantisce che i
 messaggi scambiati con il server mantengano sempre i tipi e i campi
 attesi. Per prevenire che piani malformati raggiungano i modelli ASM, il
@@ -1199,6 +1332,17 @@ invalid_request, quando il piano è stato rifiutato da schema o binding
 verificato un errore operativo (il gate lo tratta come ERROR).]{.mark}
 
 ## 4.5 Framework di enforcement[]{.mark}
+
+[Rispetto al processo RSE descritto nella sezione 2.8, il passo 1
+corrisponde ai vincoli e agli obiettivi del caso di studio (sezione
+6.1), il passo 2 ai modelli ASM (sezione 6.2), il passo 3 al framework
+di enforcement descritto in questa sezione e al binding del caso di
+studio (sezione 4.6), il passo 4 all'avvio containerizzato (sezione
+3.2.1). L'evoluzione dei modelli a runtime (passo 5) resta fuori dagli
+obiettivi di questa tesi. Come in \[29\], il framework è realizzato in
+Python e interagisce con AsmetaS@run.time tramite la sua API REST,
+caricando i modelli all'avvio ed eseguendone un passo per ogni
+richiesta.]{.mark}
 
 [Il framework di enforcement è il componente che orchestra i modelli ASM
 sul web service AsmetaS. È esterno a LangGraph, gira nel processo del
@@ -1245,7 +1389,7 @@ server aggiunge alla descrizione di submit_plan, e un glossario dei
 codici di motivo restituiti dall\'enforcer, che il server allega al
 risultato come spiegazione in linguaggio naturale.]{.mark}
 
-## [4.6 Separazione tra motore generico e casi di studio]{.mark}
+## 4.6 Separazione tra motore generico e casi di studio[]{.mark}
 
 [Il repository è diviso in quattro parti con responsabilità
 distinte:]{.mark}
@@ -1262,6 +1406,90 @@ distinte:]{.mark}
 
 - [resources: i modelli ASM e le librerie, unico luogo del repository in
   cui sono presenti file .asm.]{.mark}
+
+[La struttura del repository è la seguente:]{.mark}
+
+[agentic-mcp-framework/]{.mark}
+
+[├── core/ \# motore generico, senza conoscenza di dominio]{.mark}
+
+[│ ├── agent_graph.py \# grafo LangGraph]{.mark}
+
+[│ ├── agent_state.py \# stato condiviso tra i nodi]{.mark}
+
+[│ ├── planner_node.py \# PlannerNode]{.mark}
+
+[│ ├── planner_prompt.md \# prompt di sistema generico]{.mark}
+
+[│ ├── formal_gate_node.py \# FormalGateNode]{.mark}
+
+[│ ├── config.py]{.mark}
+
+[│ └── cli_formatter.py \# interfaccia a riga di comando]{.mark}
+
+[├── enforcement/ \# framework di enforcement (sez. 4.5)]{.mark}
+
+[│ ├── gateway.py]{.mark}
+
+[│ ├── preview_orchestrator.py]{.mark}
+
+[│ ├── asm_runtime.py]{.mark}
+
+[│ ├── rest_client.py]{.mark}
+
+[│ ├── mcp_facade.py]{.mark}
+
+[│ ├── contracts.py]{.mark}
+
+[│ ├── bootstrap.py]{.mark}
+
+[│ └── deploy.py]{.mark}
+
+[├── use_cases/]{.mark}
+
+[│ └── pillbox/ \# caso di studio (cap. 6)]{.mark}
+
+[│ ├── config.py \# UseCaseConfig]{.mark}
+
+[│ ├── binding.py \# binding dei tool verso i modelli ASM]{.mark}
+
+[│ ├── enforcement.json \# configurazione di enforcement]{.mark}
+
+[│ ├── mcp_server.py \# server MCP del caso di studio]{.mark}
+
+[│ ├── planner_hints.md \# istruzioni di dominio per il Planner]{.mark}
+
+[│ ├── run_scenario.py \# esecutore di scenari senza LLM]{.mark}
+
+[│ └── scenarios/ \# M1, M2-A, M2-B, M2-C (.json)]{.mark}
+
+[├── resources/ \# unico luogo con file .asm (sez. 6.2)]{.mark}
+
+[│ ├── libraries/]{.mark}
+
+[│ │ └── StandardLibrary.asm]{.mark}
+
+[│ └── models/]{.mark}
+
+[│ ├── scheduler.asm]{.mark}
+
+[│ ├── PreviewCoordinator.asm]{.mark}
+
+[│ ├── pillboxDevice.asm]{.mark}
+
+[│ ├── configurationMgr.asm]{.mark}
+
+[│ └── knowledge.asm]{.mark}
+
+[├── Dockerfile]{.mark}
+
+[├── docker-compose.yml]{.mark}
+
+[├── requirements.txt]{.mark}
+
+[└── README.md]{.mark}
+
+[]{.mark}
 
 [Tutto ciò che il motore deve sapere su un dominio è racchiuso nella
 struttura UseCaseConfig, che definisce il comando di avvio del server
@@ -1280,7 +1508,7 @@ carica solo quelli mancanti, per non sostituire modelli eventualmente in
 uso. Al termine verifica che il servizio conservi tutti i file
 richiesti, altrimenti l\'avvio fallisce.]{.mark}
 
-# [5. Formal Gate e protocollo di enforcement]{.mark}
+# [5.]{.mark} Formal Gate e protocollo di enforcement
 
 ## 5.1 Ruolo architetturale e filosofia di design
 
@@ -1294,10 +1522,8 @@ studio.[]{.mark}
 le sue regole sono fisse e il suo esito dipende unicamente dalla tool
 call proposta dal Planner e dalla risposta del server MCP. Il nodo non
 valuta di persona la sicurezza delle azioni: questa è decisa dai modelli
-ASM, che il framework di enforcement esegue su AsmetaS nel processo
-del]{.mark}
-
-[server. Il compito del gate è garantire che ogni azione attuativa passi
+ASM, che il framework di enforcement esegue su AsmetaS nel processo del
+server. Il compito del gate è garantire che ogni azione attuativa passi
 da quella verifica e consegnare al Planner la decisione così com\'è,
 insieme alle istruzioni per riportarla correttamente
 all\'utente.]{.mark}
@@ -1326,7 +1552,7 @@ principi guida fondamentali:]{.mark}
   stato del sistema e di richiesta la decisione di sicurezza è
   riproducibile.]{.mark}
 
-## [5.2 Classificazione dei tool e bypass delle azioni di sola lettura]{.mark}
+## 5.2 Classificazione dei tool e bypass delle azioni di sola lettura[]{.mark}
 
 [Per evitare l\'overhead computazionale e lo spreco di risorse dovuto
 alla verifica formale sincrona di operazioni prive di rischi viene
@@ -1349,7 +1575,7 @@ Planner:]{.mark}
 []{.mark}
 
 [A differenza di un riconoscimento basato sul nome del tool (ad esempio
-su prefissi come get\\ o suffissi come \\status), che un tool con un
+su prefissi come get\_ o suffissi come \_status), che un tool con un
 nome fuorviante potrebbe aggirare, la classificazione si fonda su una
 dichiarazione esplicita del server, e un tool privo dell\'annotazione è
 trattato per default come potenzialmente pericoloso.]{.mark}
@@ -1395,11 +1621,13 @@ bloccarla.]{.mark}
 
 []{.mark}Il ciclo di esecuzione del Formal Gate e l\'instradamento
 condizionale delle decisioni sono sintetizzati nel diagramma di workflow
-illustrato in Figura 4.[]{.mark}
+illustrato in Figura 6.[]{.mark}
 
 []{.mark}
 
-[Figura 4:]{.mark} Diagramma di workflow[. Realizzato con
+[]{.mark}
+
+[Figura 6:]{.mark} Diagramma di workflow[. Realizzato con
 [draw.io](https://app.diagrams.net).]{.mark}
 
 []{.mark}
@@ -1537,27 +1765,29 @@ del]{.mark} [sistema, come avviene nello scenario M2-C.]{.mark}
 
 [Nella realizzazione del protocollo i compiti sono divisi tra i modelli
 ASM e il framework di enforcement. Ai modelli ASM spettano tutte le
-decisioni: l\'enforcer stabilisce se un\'azione è ammissibile, quale
-correzione prescrivere e se richiedere una preview; il coordinatore
-stabilisce, passo dopo passo, se lo stato simulato rispetta i vincoli e
-restituisce l\'esito COMPATIBLE, CONFLICT o UNKNOWN; l\'enforcer, letto
-questo esito, decide se emettere il comando e quale decisione finale
-restituire; il modello del sistema live conferma o rifiuta il comando
-ricevuto.]{.mark}
+decisioni: l\'enforcer stabilisce se un\'azione è ammissibile,
+quale]{.mark} [correzione prescrivere e se richiedere una preview; il
+coordinatore]{.mark} [stabilisce, passo dopo passo, se lo stato simulato
+rispetta i vincoli e]{.mark} [restituisce l\'esito COMPATIBLE, CONFLICT
+o UNKNOWN; l\'enforcer, letto]{.mark} [questo esito, decide se emettere
+il comando e quale decisione finale]{.mark} [restituire; il modello del
+sistema live conferma o rifiuta il comando]{.mark} [ricevuto.]{.mark}
 
 [Al framework di enforcement, scritto in Python, spetta invece
-l\'orchestrazione dei passi del protocollo: ricostruire il gemello
-rigiocando la storia degli input del sistema live, eseguire sul gemello
-la correzione e le azioni residue, invocare il coordinatore dopo ogni
-passo, restituire l\'esito della preview all\'enforcer, verificare la
-correlazione e la versione dello stato prima del commit, applicare il
-comando al sistema live e attenderne la conferma. Il framework controlla
-inoltre che le uscite dei modelli siano coerenti tra loro, per esempio
-che l\'enforcer non emetta un comando dopo una preview non compatibile, e
-tratta ogni incoerenza come errore operativo. Il framework realizza
-quindi il protocollo PGA come sequenza di passi, ma non decide nessuno
-dei suoi esiti: per un nuovo dominio bastano modelli ASM diversi e il
-relativo binding, senza modifiche al framework.]{.mark}
+l\'orchestrazione dei passi del protocollo: ricostruire il
+gemello]{.mark} [rigiocando la storia degli input del sistema live,
+eseguire sul gemello]{.mark} [la correzione e le azioni residue,
+invocare il coordinatore dopo ogni]{.mark} [passo, restituire l\'esito
+della preview all\'enforcer, verificare la]{.mark} [correlazione e la
+versione dello stato prima del commit, applicare il]{.mark} [comando al
+sistema live e attenderne la conferma. Il framework controlla]{.mark}
+[inoltre che le uscite dei modelli siano coerenti tra loro, per
+esempio]{.mark} [che l\'enforcer non emetta un comando dopo una preview
+non compatibile, e]{.mark} [tratta ogni incoerenza come errore
+operativo. Il framework realizza]{.mark} [quindi il protocollo PGA come
+sequenza di passi, ma non decide nessuno]{.mark} [dei suoi esiti: per un
+nuovo dominio bastano modelli ASM diversi e il]{.mark} [relativo
+binding, senza modifiche al framework.]{.mark}
 
 # [6.]{.mark} Caso di studio e validazione sperimentale
 
@@ -1677,10 +1907,7 @@ spiegazione per l\'LLM.]{.mark}
 [Le istruzioni di dominio aggiunte al prompt del Planner si limitano a
 descrivere il sistema e il formato degli orari: l\'utente conosce solo i
 nomi dei farmaci, mentre scomparti e indici sono dettagli interni che
-l\'agente non deve esporre. Nei tool gli orari sono espressi in minuti
-dalla mezzanotte: per comunicarli all\'utente l\'agente non li converte
-da sé, ma li copia dal campo schedule_hhmm dello stato, già nel formato
-HH:MM.]{.mark}
+l\'agente non deve esporre.]{.mark}
 
 ## 6.3 Scenari sperimentali[]{.mark}
 
@@ -1749,15 +1976,81 @@ conclusioni.]{.mark}
 ## 6.5 Risultati[]{.mark}
 
 [Gli scenari sono stati eseguiti sia con l\'esecutore senza LLM sia in
-chat, con il Planner basato su gemini-flash-lite-latest, ottenendo in
-tutti i casi l\'esito atteso.]{.mark}
+chat, con il Planner basato su gemini-3.5-flash-lite, ottenendo in tutti
+i casi l\'esito atteso. Per brevità si riporta la sola trascrizione
+dello scenario M1; gli scenari M2 e alternativi sono descritti di
+seguito e possono essere rieseguiti tramite i file presenti nel
+repository del progetto e consultati nelle wiki dello stesso
+\[17\].]{.mark}
 
 - [M1: l\'orario richiesto (1050) dista solo 90 minuti dalla dose delle
   19:00 (1140). Lo scheduler propone la correzione più vicina, 1020
   (17:00), la preview sul gemello risulta COMPATIBLE e il comando viene
   applicato e confermato. Il Formal Gate restituisce al planner la
   decisione REPLACE e il Planner spiega all\'utente che l\'orario
-  richiesto è stato sostituito.]{.mark}
+  richiesto è stato sostituito. Di seguito è riportato l'estratto della
+  conversazione:]{.mark}
+
+> [\[17:07:50\] Formal Gate Agent ready.]{.mark}
+>
+> [Type your requests below. Type \'exit\' or \'quit\' to
+> terminate.]{.mark}
+>
+> []{.mark}
+>
+> [You: sposta il sumatriptan delle 12:10 alle 17:30]{.mark}
+>
+> [\[17:08:01\] Proposed action: \'get_system_state\' ({})]{.mark}
+>
+> [\[17:08:01\] Bypass: Tool \'get_system_state\' is declared
+> read-only.]{.mark}
+>
+> [\[17:08:01\] {]{.mark}
+>
+> [\"version\": 0,]{.mark}
+>
+> [\"medication\": {]{.mark}
+>
+> [\"compartment1\": \"fosamax\",]{.mark}
+>
+> [\"compartment2\": \"Sumatriptan\"]{.mark}
+>
+> [},]{.mark}
+>
+> [\"schedule\": {]{.mark}
+>
+> [\"compartment1\": \[]{.mark}
+>
+> [360]{.mark}
+>
+> [\],]{.mark}
+>
+> [\"compartment2\": \[]{.mark}
+>
+> [730,]{.mark}
+>
+> [\...]{.mark}
+>
+> [\[17:08:03\] Proposed action: \'submit_plan\' ({\'submission\':
+> {\'goals\': None, \'actions\': \[{\'parameters\': {\'compartment\':
+> \'compartment2\', \'dose_index\': 0, \'time\': 1050}, \'kind\':
+> \'reschedule\'}\], \'expected_version\': 0, \'request_id\':]{.mark}
+>
+> [\'req_1\'}})]{.mark}
+>
+> [\[17:08:03\] Verdict: REPLACE \| REPLACE: NO_REASON \| Applied:
+> {\'kind\': \'reschedule\', \'parameters\': {\'compartment\':
+> \'compartment2\', \'dose_index\': 0, \'time\': 1020}}]{.mark}
+>
+> []{.mark}
+>
+> [Il sistema di sicurezza ha modificato la richiesta e ha spostato la
+> dose delle 12:10 del Sumatriptan alle 17:00 anziché alle
+> 17:30.]{.mark}
+>
+> []{.mark}
+
+[]{.mark}
 
 - [M2-A: la correzione 1020 sarebbe ammissibile da sola, ma sul gemello
   la seconda azione porta a \[1020, 1100\], con una distanza di 80
@@ -1877,7 +2170,7 @@ quantitativo.]{.mark}
   può essere applicato ad altri domini safety-critical aggiungendo
   soltanto modelli ASM, binding e server MCP.]{.mark}
 
-# 8. Bibliografia
+# Bibliografia
 
 \[1\] A. Gargantini, E. Riccobene, and P. Scandurra, "A metamodel-based
 language and a simulation engine for abstract state machines," *J.
@@ -1993,4 +2286,17 @@ and Self-Managing Systems (SEAMS 2026)*, Rio de Janeiro, Brazil. ACM,
 
 \[27\] Y. Falcone, L. Mariani, A. Rollet, and S. Saha, "Runtime failure
 prevention and reaction," in *Lectures on Runtime Verification*. Cham:
-Springer, 2018, pp. 103--134.
+Springer, 2018, pp. 103--134.[]{.mark}
+
+[]{.mark}\[28\] Pydantic, "Pydantic Validation," *Pydantic Docs*, 2026.
+\[Online\]. Available:
+<https://pydantic.dev/docs/validation/latest/get-started/>[]{.mark}
+
+[\[29\] A. Bombarda, S. Bonfanti, A. Gargantini, N. Pellegrinelli, and
+P. Scandurra, "Safety enforcement for autonomous driving on a simulated
+highway using Asmeta models@run.time," in *Rigorous State-Based Methods
+(ABZ 2025)*, M. Leuschel and F. Ishikawa, Eds., LNCS, vol. 15728. Cham,
+Switzerland: Springer, 2026, pp. 212--230, doi:
+10.1007/978-3-031-94533-5_13.]{.mark}
+
+# Ringraziamenti
