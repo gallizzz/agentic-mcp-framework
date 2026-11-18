@@ -1161,7 +1161,7 @@ out-of-process):]{.mark}
   HTTP/REST]{.mark}.[]{.mark}
 
 - [In-Process Memory Layer (LangGraph): L\'orchestrazione tra il
-  proponente, il Formal Gate e l\'esecutore avviene all\'interno
+  proponente e il Formal Gate avviene all\'interno
   dell\'host LangGraph tramite passaggio di stato in RAM
   (AgentState).]{.mark}
 
@@ -1541,10 +1541,10 @@ principi guida fondamentali:]{.mark}
   conformità.]{.mark}
 
 - [Agnosticismo dal dominio applicativo: Il codice del gate non contiene
-  regole cablate o assunzioni rigide legate a uno specifico scenario. Le
-  variabili da monitorare, i parametri d\'azione e le regole di
-  sicurezza vengono estratti e valutati dinamicamente rispetto alla
-  specifica del modello ASM caricato sul server.]{.mark}
+  regole cablate o assunzioni rigide legate a uno specifico scenario. I
+  tool vengono scoperti tramite MCP, le azioni ammesse e i loro
+  parametri sono definiti dal binding del caso di studio e le regole di
+  sicurezza risiedono nei modelli ASM caricati sul server.]{.mark}
 
 - [Rigore algoritmico e riproducibilità: A parità di proposta d\'azione
   e di risposta del server, il Formal Gate produce sempre il medesimo
