@@ -55,14 +55,17 @@ l'ambiente di esecuzione. Il Formal Gate intercetta le azioni candidate
 e ne valuta la conformità rispetto alle precondizioni e ai vincoli di
 sicurezza codificati nel modello ASM. Il Formal Gate realizza una
 verifica a runtime preventiva controllando l'azione candidata prima che
-venga eseguita e, se necessario, applicando una delle due politiche
+venga eseguita e, se necessario, applicando una delle politiche
 previste: lo shielding, che sostituisce l'azione non valida con la
-correzione ammissibile più vicina calcolata dal modello ASM, oppure il
+correzione ammissibile più vicina calcolata dal modello ASM, il
 re-planning con invio all\'agente LLM di un feedback correttivo per
-riformulare la pianificazione dell\'azione.
+riformulare la pianificazione dell\'azione, oppure il blocco delle
+richieste non ammissibili. Prima di applicare una correzione, il
+framework ne simula l'effetto su un gemello isolato del sistema, e le
+applica solo se la simulazione non rileva conflitti..
 
-La valutazione del pattern è stata condotta attraverso l\'applicazione
-ad alcuni casi di studio in ambienti simulati.
+La valutazione del pattern è stata condotta attraverso l\'applicazione a
+un caso di studio in ambiente simulato.
 
 [Indice]{.mark}
 
@@ -73,12 +76,6 @@ ad alcuni casi di studio in ambienti simulati.
 [[1.2 Stato dell'arte]{.mark}](#stato-dellarte)
 
 [1.3 Contesto tecnologico[]{.mark}](#contesto-tecnologico) []{.mark}
-
-[[1.3.1 Dominio probabilistico: LLM, LangGraph e
-MCP]{.mark}](#dominio-probabilistico-llm-langgraph-e-mcp) []{.mark}
-
-[[1.3.2 Dominio deterministico: ASM e
-ASMETA]{.mark}](#dominio-deterministico-asm-e-asmeta) []{.mark}
 
 [[1.4 Soluzione proposta]{.mark}](#soluzione-proposta)
 
@@ -103,17 +100,6 @@ dell'auto-correzione](#feedback-loop-e-limiti-dellauto-correzione)
 
 [[2.7 Agent design pattern]{.mark}](#agent-design-pattern) []{.mark}
 
-[[2.7.1 Multimodal Guardrails per l'intercettazione delle
-azioni]{.mark}](#multimodal-guardrails-per-lintercettazione-delle-azioni)
-[]{.mark}
-
-[[2.7.2 Cross-Reflection per il
-re-planning]{.mark}](#cross-reflection-per-il-re-planning) []{.mark}
-
-[[2.7.3 Agent Adapter per
-l'interoperabilità]{.mark}](#agent-adapter-per-linteroperabilità)
-[]{.mark}
-
 [2.8 Sistemi auto-adattativi e ciclo
 MAPE-K[]{.mark}](#sistemi-auto-adattativi-e-ciclo-mape-k) []{.mark}
 
@@ -121,29 +107,7 @@ MAPE-K[]{.mark}](#sistemi-auto-adattativi-e-ciclo-mape-k) []{.mark}
 
 [3.1 Obiettivi](#obiettivi)
 
-[3.1.1 Runtime enforcement e I/O
-sanitization](#runtime-enforcement-e-io-sanitization)
-
-[3.1.2 Gestione dello stato e controllo deterministico del
-flusso](#gestione-dello-stato-e-controllo-deterministico-del-flusso)
-
-[3.1.3 Infrastruttura modulare basata su
-MCP](#infrastruttura-modulare-basata-su-mcp)
-
-[3.1.4 Accesso ai metodi formali in linguaggio
-naturale](#accesso-ai-metodi-formali-in-linguaggio-naturale)
-
 [3.2 Piano d'azione](#piano-dazione)
-
-[3.2.1 Containerizzazione e validazione
-dell\'infrastruttura](#containerizzazione-e-validazione-dellinfrastruttura)
-
-[3.2.2 Sviluppo del framework di enforcement e del server
-MCP](#sviluppo-del-framework-di-enforcement-e-del-server-mcp)
-
-[3.2.3 Progettazione dei prompt](#progettazione-dei-prompt)
-
-[3.2.4 Sviluppo del grafo LangGraph](#sviluppo-del-grafo-langgraph)
 
 [[4.]{.mark} Progettazione e
 implementazione](#progettazione-e-implementazione)
@@ -152,14 +116,6 @@ implementazione](#progettazione-e-implementazione)
 gerarchico](#architettura-neuro-simbolica-a-controllo-gerarchico)
 
 [[4.2 Anatomia dei nodi LangGraph]{.mark}](#anatomia-dei-nodi-langgraph)
-
-[[4.2.1 PlannerNode]{.mark} e prompt di
-sistema](#plannernode-e-prompt-di-sistema)
-
-[[4.2.2 FormalGateNode]{.mark} e verdetti](#formalgatenode-e-verdetti)
-
-[[4.2.3 Instradamento e stato
-condiviso]{.mark}](#instradamento-e-stato-condiviso)
 
 [4.3 Protocolli e livelli di
 comunicazione[]{.mark}](#protocolli-e-livelli-di-comunicazione)
@@ -331,7 +287,7 @@ questo progetto intende far comunicare: da un lato l\'ecosistema
 probabilistico dell\'intelligenza artificiale e degli agenti,
 dall\'altro l\'ecosistema deterministico dei metodi formali.
 
-### [1.3.1 Dominio probabilistico: LLM, LangGraph e MCP]{.mark}
+### [Dominio probabilistico: LLM, LangGraph e MCP]{.mark}
 
 [Caratterizzato dall\'impiego di modelli linguistici di grandi
 dimensioni per la comprensione dell\'intento dell\'utente in linguaggio
@@ -380,7 +336,7 @@ dall'esecuzione dei task.
 Figura 1: Architettura di MCP. Fonte:
 <https://modelcontextprotocol.io/docs/getting-started/intro>
 
-### [1.3.2 Dominio deterministico: ASM e ASMETA]{.mark}
+### [Dominio deterministico: ASM e ASMETA]{.mark}
 
 Le Abstract State Machines (ASM) sono un metodo formale per la specifica
 di sistemi complessi. Possono essere viste come un'estensione delle
@@ -425,7 +381,7 @@ per la I/O sanitization e il runtime enforcement delle azioni degli
 agenti sfruttando un agentic framework integrato con lo standard di
 interoperabilità Model Context Protocol (MCP).
 
-Il caso di studio consiste nell'ingegnerizzazione di un pattern per
+Il lavoro consiste nell'ingegnerizzazione di un pattern per
 l\'interazione tra un modello probabilistico (LLM) e un sistema di
 verifica formale deterministico, rappresentato dal simulatore ad
 Abstract State Machines AsmetaS \[1\]. Nel sistema proposto esso viene
@@ -435,6 +391,11 @@ intercettate a runtime e sottoposte alla verifica di precondizioni,
 guardie e invarianti di sicurezza, abilitando l\'esecuzione solo in
 presenza di un verdetto formale positivo e guidando cicli controllati di
 auto-correzione in caso di violazione.[]{.mark}
+
+[Quando il modello corregge un'azione, la correzione non viene applicata
+subito, il suo effetto sul resto del piano viene prima simulato su un
+gemello del sistema, secondo il protocollo descritto nelle sezioni 3.1 e
+5.6.]{.mark}
 
 [L\'implementazione del pattern, comprensiva del motore di
 orchestrazione, del framework di enforcement e del caso di studio, è
@@ -536,16 +497,10 @@ applicare quando i predicati sono soddisfatti, come bloccare l'azione,
 sottoporla all'ispezione dell'utente, eseguire un'azione correttiva
 prescritta o richiedere all'LLM di rivalutare la propria scelta.
 
-La maggiore autonomia che hanno assunto gli agenti ha portato ad
-incidenti nel mondo reale, tra cui il già citato caso di Replit. Senza
-una specifica che codifichi cosa significhi effettivamente \"successo\"
-(inclusi i vincoli che devono essere rispettati durante l\'esecuzione),
-l\'agente non ha alcuna base per l\'autovalutazione. Può giudicare le
-proprie azioni solo in base al fatto che sembrino fare progressi verso
-l\'obiettivo, non in base al rispetto dei limiti a cui l\'utente è
-effettivamente interessato. Questo episodio mette in risalto la
-necessità di soluzioni che siano in grado di valutare e porre delle
-barriere alle azioni che questi framework agentici possono eseguire.
+Incidenti come quello di Replit (sezione 1.1) mostrano che strumenti di
+valutazione come ToolEMU, che stimano i rischi prima del rilascio, non
+bastano. Servono anche barriere che agiscano a runtime sulle singole
+azioni, come quelle definite da AgentSpec.
 
 ## 2.5 Ragionamento neuro-simbolico e metodi formali
 
@@ -563,8 +518,8 @@ l'utente nella traduzione di requisiti dal linguaggio colloquiale
 custom o specificamente addestrate. L\'utilizzo di framework
 architetturali a grafo (come LangGraph) combinati a protocolli di
 standardizzazione universale (come MCP) per orchestrare la comunicazione
-tra l\'agente AI e il motore formale (AsmetaS), rappresenta un\'area
-applicativa ancora inesplorata \[8\] \[9\].
+tra l\'agente AI e il motore formale (AsmetaS), risulta ancora poco
+esplorato \[8\] \[9\].
 
 In questo contesto il modello ad Abstract State Machine diviene un
 controllore attivo di I/O sanitization che presidia le comunicazioni,
@@ -602,7 +557,7 @@ l\'architettura sviluppata in questo lavoro si colloca all\'intersezione
 di tre modelli principali: Multimodal Guardrails, Cross-Reflection e
 Agent Adapter.]{.mark}
 
-### [2.7.1 Multimodal Guardrails per l'intercettazione delle azioni]{.mark}
+### [Multimodal Guardrails per l'intercettazione delle azioni]{.mark}
 
 [Il pattern Multimodal Guardrails \[16\] risponde alla necessità di
 vincolare gli input e gli output dei modelli affinché rispettino
@@ -616,7 +571,7 @@ bloccando le transizioni non valide ed eventualmente applicando
 politiche di shielding tramite l\'esecuzione di azioni di ripiego
 sicure.]{.mark}
 
-### [2.7.2 Cross-Reflection per il re-planning]{.mark}
+### [Cross-Reflection per il re-planning]{.mark}
 
 [I pattern di Reflection \[16\] descrivono la capacità di un sistema di
 raffinare e correggere un piano di azione sulla base di un feedback. La
@@ -630,7 +585,7 @@ Questo feedback viene reiniettato nel contesto dell\'LLM per guidare un
 ciclo di riesecuzione e ri-pianificazione (re-planning) mirato e
 controllato.]{.mark}
 
-### [2.7.3 Agent Adapter per l'interoperabilità]{.mark}
+### [Agent Adapter per l'interoperabilità]{.mark}
 
 [Il pattern Agent Adapter \[16\] definisce la presenza di interfacce
 d\'astrazione standardizzate volte a connettere l\'agente con strumenti
@@ -696,7 +651,7 @@ LLM, che persegue gli obiettivi dell\'utente (sezione 4.1, Figura
 
 ## 3.1 Obiettivi
 
-### 3.1.1 Runtime enforcement e I/O sanitization
+### Runtime enforcement e I/O sanitization
 
 Gli LLM sono per loro natura probabilistici e vulnerabili ad
 allucinazioni, faticano nel mantenere coerenza logica in sistemi
@@ -706,7 +661,7 @@ validazione delle regole. In questo modo L\'LLM non deve dedurre lo
 stato successivo, ma formula proposte di azione la cui conformità viene
 certificata prima dell\'effettiva attuazione.
 
-### 3.1.2 Gestione dello stato e controllo deterministico del flusso
+### Gestione dello stato e controllo deterministico del flusso
 
 Abbandonare l\'affidamento cieco al prompt engineering a favore di un
 modello a grafo ciclico gestito tramite LangGraph. L\'obiettivo è
@@ -720,14 +675,14 @@ flusso di controllo è regolato da edge condizionali deterministici:
 
 <!-- -->
 
-- Se viene rilevata la violazione di una guardia, l\'edge condizionale
-  impedisce l\'esecuzione e devia il flusso verso il nodo di
-  pianificazione, innescando un ciclo di retroazione.
+- Se viene rilevata la violazione di una guardia, nessuna modifica
+  raggiunge il sistema e l'edge condizionale riporta il motivo al nodo
+  di pianificazione, innescando un ciclo di retroazione.
 
-### 3.1.3 Infrastruttura modulare basata su MCP
+### Infrastruttura modulare basata su MCP
 
 Invece di scrivere codice custom che lega indissolubilmente un LLM
-specifico al web service AsmetaS, si strutturerà il sistema secondo le
+specifico al web service AsmetaS, il sistema è strutturato secondo le
 più recenti raccomandazioni sull\'ingegneria del software agentico
 \[14\].
 
@@ -751,7 +706,7 @@ invocare la sanitizzazione delle azioni con una latenza minima e una
 struttura snella, evitando l\'overhead informatico e la complessità di
 gestione di contratti di rete A2A.]{.mark}
 
-### 3.1.4 Accesso ai metodi formali in linguaggio naturale
+### Accesso ai metodi formali in linguaggio naturale
 
 La comprensione e l'utilizzo delle Abstract State Machines non sono
 immediati, necessitano di esperienza nel campo della logica formale e
@@ -764,11 +719,47 @@ modello matematico complesso attraverso il linguaggio naturale. L\'LLM
 traduce le richieste colloquiali dell\'utente in chiamate strutturate e
 decodifica gli stati restituiti dal simulatore matematico in spiegazioni
 chiare e comprensibili, mantenendo inalterato il rigore scientifico del
-modello sottostante.
+modello sottostante.[]{.mark}
+
+**Verifica della correzione sul piano residuo**
+
+[Lo shielding classico valuta una sola azione alla volta: se l\'azione
+non è ammissibile, l\'enforcer la sostituisce con un\'azione correttiva
+\[18\] \[27\]. In un piano composto da più azioni, però, una correzione
+sicura in isolamento può rendere non sicure le azioni successive. Quando
+l\'enforcer trova una correzione locale, il framework deve quindi
+decidere come coordinarla con il resto del piano. Si possono individuare
+tre politiche, che condividono le stesse regole di sicurezza e
+differiscono solo nella risposta a un\'azione localmente non
+sicura:]{.mark}
+
+[Always-Replan (AR): rifiuta l\'azione e chiede un nuovo piano, senza
+applicare la correzione;]{.mark}
+
+[Local-First (LF): applica subito la correzione senza considerare le
+azioni successive; se queste vengono bloccate, ripianifica in
+seguito;]{.mark}
+
+[Preview-Based Goal-Aware (PGA): simula la correzione e il piano residuo
+su un gemello isolato del sistema e applica la correzione solo se la
+simulazione è compatibile con i vincoli di sicurezza e con gli obiettivi
+dell\'utente, altrimenti richiede un nuovo piano.]{.mark}
+
+[AR è sicura ma costosa, perché ricorre all\'LLM anche quando la
+correzione sarebbe stata accettabile, inoltre l\'efficacia
+del\\\'auto-correzione diminuisce a ogni iterazione \[11\]; LF evita la
+ripianificazione ma può modificare il sistema in modo prematuro,
+lasciando l\'agente a rimediare su uno stato già cambiato. PGA riprende
+l\'idea del ragionamento prospettico basato su modello \[24\].
+L\'obiettivo è adottare la politica PGA, nell\'ipotesi che subordinare
+il commit di una correzione al suo effetto sul piano residuo eviti
+modifiche premature senza dover sempre ricorrere alla ripianificazione.
+Il protocollo e il confronto delle tre politiche sugli scenari del caso
+di studio sono descritti nelle sezioni 5.5 e 5.6.]{.mark}
 
 ## 3.2 Piano d'azione
 
-### 3.2.1 Containerizzazione e validazione dell\'infrastruttura
+### Containerizzazione e validazione dell\'infrastruttura
 
 La prima fase del progetto è dedicata all\'allestimento di un ambiente
 di sviluppo isolato e riproducibile attraverso Docker:
@@ -783,7 +774,7 @@ di sviluppo isolato e riproducibile attraverso Docker:
   gestione dei protocolli e il recupero dinamico degli schemi da parte
   dell\'MCP Client.
 
-### 3.2.2 Sviluppo del framework di enforcement e del server MCP
+### Sviluppo del framework di enforcement e del server MCP
 
 La seconda fase prevede il wrapping del motore formale:[]{.mark}
 
@@ -813,7 +804,7 @@ La seconda fase prevede il wrapping del motore formale:[]{.mark}
   appartengano alla tassonomia delle decisioni (ALLOW, REPLACE, REPLAN,
   BLOCK).]{.mark}
 
-### 3.2.3 Progettazione dei prompt
+### Progettazione dei prompt
 
 È necessario istruire l'agente proponente tramite prompt per il suo
 ruolo di "traduttore" dell'intento espresso in linguaggio colloquiale
@@ -824,7 +815,7 @@ dello stesso per renderlo comprensibile all'utente.[]{.mark}
 
 [Il prompt non deve essere considerato un meccanismo di sicurezza in
 quanto un vincolo espresso solo in linguaggio naturale può essere
-ignorato dal]{.mark} [modello, quindi la garanzia di correttezza resterà
+ignorato dal]{.mark} [modello, quindi la garanzia di correttezza resta
 affidata al Formal]{.mark} [Gate e ai modelli ASM. Al prompt spetta il
 compito di ridurre gli]{.mark} [errori che non compromettono la
 sicurezza ma l\'efficacia dell\'agente,]{.mark} [come piani incompleti o
@@ -835,7 +826,7 @@ essere divise in una parte generica, valida per qualunque caso di
 studio, e in una parte di dominio fornita dal caso di studio
 stesso.]{.mark}
 
-### 3.2.4 Sviluppo del grafo LangGraph
+### Sviluppo del grafo LangGraph
 
 La fase conclusiva realizza il nucleo architetturale del progetto,
 implementando un grafo ciclico a stati (StateGraph) retto da vincoli
@@ -912,9 +903,9 @@ dall'agente passano sempre dall'Enforcement Gateway, e anche gli
 aggiornamenti sul sistema reale restano soggetti all'enforcement a
 runtime. Quando l'enforcer corregge un'azione, la correzione e il piano
 residuo possono essere simulati su un'istanza ASM isolata, che fa da
-gemello digitale controfattuale del sistema. Se la simulazione rileva un
-conflitto, l'agente ripianifica e le azioni riviste rientrano nel
-Gateway.]{.mark}
+gemello digitale controfattuale del sistema (politica PGA, sezione 3.1).
+Se la simulazione rileva un conflitto, l'agente ripianifica e le azioni
+riviste rientrano nel Gateway.]{.mark}
 
 [La separazione delle responsabilità è netta: l\'enforcement preserva i
 vincoli di sicurezza modellati, mentre il raggiungimento degli obiettivi
@@ -930,7 +921,7 @@ e scrivendo uno stato comune \[15\], nel nostro caso chiamato
 AgentState. I componenti del sistema e le loro relazioni sono illustrati
 nel diagramma dei componenti in Figura 5.]{.mark}
 
-### [4.2.1 PlannerNode]{.mark} e prompt di sistema
+### [PlannerNode]{.mark} e prompt di sistema
 
 [Il PlannerNode rappresenta la componente neurale dell\'agente che
 gestisce l\'interazione diretta con l\'operatore umano, garantisce la
@@ -1061,7 +1052,7 @@ dall\'LLM:]{.mark}
   la conversazione conclude il turno corrente raggiungendo lo stato
   END.]{.mark}
 
-### [4.2.2 FormalGateNode]{.mark} e verdetti
+### [FormalGateNode]{.mark} e verdetti
 
 [Il suo obiettivo è garantire, in modo deterministico, che ogni azione
 proposta dall\'LLM che modifica il sistema venga verificata rispetto
@@ -1078,11 +1069,9 @@ MCP e gli unici nomi noti al nodo sono quelli del contratto con il
 server (submit_plan e get_system_state), definiti in un modulo condiviso
 (contracts.py).]{.mark}
 
-[Il nodo integra un meccanismo di bypass grazie al quale i tool che
-il]{.mark} [server dichiara di sola lettura, tramite l\'annotazione MCP
-readOnlyHint, vengono eseguiti direttamente senza validazione formale
-(verdetto BYPASS). L\'unico tool attuativo ammesso è submit_plan, che
-viene inoltrato al server per la verifica e l\'esecuzione; qualsiasi
+[I tool dichiarati di sola lettura vengono eseguiti direttamente
+(sezione 5.2). L'unico tool attuativo ammesso è submit_plan, che viene
+inoltrato al server per la verifica e l'esecuzione, mentre qualsiasi
 altro tool viene bloccato e il turno termina con un errore.]{.mark}
 
 [Il gate non reinterpreta le decisioni del server: la decisione finale
@@ -1114,7 +1103,7 @@ provengono dagli ASM:]{.mark}
   di ripiego, con l\'indicazione se il comando sia stato applicato, non
   applicato o se l\'esito sia sconosciuto.]{.mark}
 
-### [4.2.3 Instradamento e stato condiviso]{.mark}
+### [Instradamento e stato condiviso]{.mark}
 
 [Verifica ed esecuzione avvengono entrambe nel server MCP del caso di
 studio, che applica il comando sul sistema solo dopo il verdetto degli
@@ -1140,10 +1129,7 @@ nuovo messaggio dell\'utente.]{.mark}
 
 []{.mark}
 
-[Figura 5: Diagramma dei componenti. Realizzato con
-[draw.io](https://app.diagrams.net).]{.mark}
-
-[]{.mark}
+Figura 5: Diagramma dei componenti principali.
 
 ## **4.3 Protocolli e livelli di comunicazione[]{.mark}**
 
@@ -1161,18 +1147,21 @@ out-of-process):]{.mark}
   HTTP/REST]{.mark}.[]{.mark}
 
 - [In-Process Memory Layer (LangGraph): L\'orchestrazione tra il
-  proponente e il Formal Gate avviene all\'interno
-  dell\'host LangGraph tramite passaggio di stato in RAM
-  (AgentState).]{.mark}
+  proponente e il Formal Gate avviene all\'interno dell\'host LangGraph
+  tramite passaggio di stato in RAM (AgentState).]{.mark}
 
-- [Agent-to-Tool / MCP Layer (stdio): La comunicazione verso il server
-  MCP del caso di studio, che contiene il framework di enforcement,
-  avviene tramite un sottoprocesso isolato basato sullo standard Model
-  Context Protocol (MCP), garantendo il disaccoppiamento
-  dell\'esecuzione e l\'isolamento dei processi. L\'agente mantiene con
-  il server un\'unica sessione persistente per tutta la chat, poiché il
-  server conserva in memoria lo stato del sistema e
-  dell\'enforcement.]{.mark}
+- [Agent-to-Tool / MCP Layer (JSON/RPC 2.0 su stdio): La comunicazione
+  verso il server MCP del caso di studio, che contiene il framework di
+  enforcement, avviene tramite un sottoprocesso isolato basato sullo
+  standard Model Context Protocol (MCP), che comunica con l'host tramite
+  i flussi standard di input e output, garantendo il disaccoppiamento
+  dell\'esecuzione e l\'isolamento dei processi. Le capacità del server
+  vengono scoperte e invocate con metodi standard del protocollo
+  (tools/list e tools/call), e i parametri di submit_plan sono descritti
+  dai modelli Pydantic esposti all'LLM come JSON Schema (Sezione 4.4).
+  L\'agente mantiene con il server un\'unica sessione persistente per
+  tutta la chat, poiché il server conserva in memoria lo stato del
+  sistema e dell\'enforcement.]{.mark}
 
 - [Backend Engine Layer (HTTP/REST): Il framework di enforcement,
   eseguito nel processo del server MCP, pilota più sessioni di modelli
@@ -1180,38 +1169,12 @@ out-of-process):]{.mark}
   Java/Spring Boot: carica i modelli, avvia le sessioni, esegue i passi
   e ne legge lo stato.]{.mark}
 
-[Nel presente lavoro di tesi, invece di adottare integrazioni ad hoc,
-l\'architettura incapsula il framework di enforcement, e con esso le
-funzionalità del simulatore formale, all\'interno di un MCP Server
-dedicato al caso di studio, articolando la comunicazione su tre livelli
-fondamentali:]{.mark}
-
-- [Livello di Trasporto (JSON-RPC 2.0 su stdio): garantisce il
-  disaccoppiamento dei processi e l\'isolamento dei guasti (fault
-  isolation). I server MCP operano come processi figli la cui
-  comunicazione è veicolata tramite flussi standard di input/output. Un
-  eventuale stallo o eccezione in un server esterno non compromette
-  l\'integrità del processo principale di orchestrazione.]{.mark}
-
-- [Livello applicativo e messaggistica (MCP): standardizza
-  l\'esposizione e l\'invocazione delle capacità dell\'agente sotto
-  forma di skills mediante i metodi standard del protocollo (tools/list
-  e tools/call).]{.mark}
-
-- [Livello di Governance e Schema Enforcement (Pydantic): la conformità
-  della comunicazione è garantita a runtime da contratti definiti
-  tramite Pydantic (Plan e Action). I modelli descrivono i parametri del
-  tool submit_plan, vengono esposti all\'LLM come JSON Schema tramite
-  MCP e sono riconvalidati dal server in ingresso. Un piano non conforme
-  viene respinto prima di raggiungere i modelli ASM e il Formal Gate lo
-  restituisce al Planner come feedback.]{.mark}
-
 ## 4.4 Ciclo di esecuzione e schema enforcement[]{.mark}
 
 [L\'interazione tra l\'agente proponente e il verificatore formale segue
 un flusso in tre fasi distinte:]{.mark}
 
-- [Inizializzazione della Sessione e Discovery MCP: All\'avvio
+- [Inizializzazione della Sessione e Discovery MCP: all\'avvio
   dell\'applicazione, l\'host carica la configurazione del caso di
   studio indicato dalla variabile d\'ambiente USE_CASE e avvia il
   relativo server MCP come sottoprocesso stdio. Prima di servire
@@ -1226,7 +1189,7 @@ un flusso in tre fasi distinte:]{.mark}
   l\'errore e termina prima di mostrare il prompt all\'utente
   (fail-fast).]{.mark}
 
-- [Intercettazione a Runtime: Quando l\'LLM all\'interno del PlannerNode
+- [Intercettazione a Runtime: quando l\'LLM all\'interno del PlannerNode
   formula una proposta d\'azione sotto forma di tool call, il ciclo di
   esecuzione devia la richiesta verso il FormalGateNode. Se il tool è di
   sola lettura viene eseguito direttamente; se è submit_plan, il gate lo
@@ -1234,22 +1197,11 @@ un flusso in tre fasi distinte:]{.mark}
   piano e, in caso di esito positivo, il comando viene eseguito sul
   sistema.]{.mark}
 
-- [Instradamento e Risoluzione: La decisione restituita dal server
-  determina il percorso condizionale del grafo:]{.mark}
-
-  - [Se la decisione è ALLOW o REPLACE: l\'azione, originale o corretta
-    dall\'enforcer, è già stata eseguita e confermata dal sistema; il
-    Planner riceve l\'esito e le eventuali azioni rimanenti del
-    piano.]{.mark}
-
-  - [Se la decisione è REPLAN o BLOCK: l\'esecuzione fisica viene
-    impedita. Il motivo restituito dagli ASM, accompagnato da una
-    spiegazione in linguaggio naturale, viene reiniettato nella memoria
-    contestuale dell\'LLM per sollecitare una nuova pianificazione
-    (REPLAN) o la sola risposta finale (BLOCK).]{.mark}
-
-  - [In caso di errore operativo: il turno termina senza azioni di
-    ripiego.]{.mark}
+- [Instradamento e Risoluzione: la decisione restituita dal server
+  determina il percorso condizionale del grafo, come descritto nella
+  sezione 4.2: dopo ALLOW o REPLACE il Planner prosegue con le azioni
+  rimanenti, dopo REPLAN ripianifica, dopo BLOCK può solo rispondere,
+  mentre un errore operativo termina il turno.]{.mark}
 
 [Il percorso di una richiesta di modifica attraverso i moduli del
 progetto (sezione 4.6) è il seguente:]{.mark}
@@ -1322,7 +1274,10 @@ class Plan(BaseModel):]{.mark}
 
 []{.mark}
 
-[Le opzioni extra=\"forbid\" e strict=True rifiutano campi aggiunti
+[Listato 1: definizione dei modelli Pydantic.]{.mark}
+
+[\
+Le opzioni extra=\"forbid\" e strict=True rifiutano campi aggiunti
 dall\'LLM e conversioni implicite di tipo. Dopo lo schema, il binding
 del caso di studio verifica il tipo di azione e i valori dei parametri.
 Le risposte del server hanno uno stato tra tre valori ammessi:
@@ -1338,7 +1293,7 @@ corrisponde ai vincoli e agli obiettivi del caso di studio (sezione
 6.1), il passo 2 ai modelli ASM (sezione 6.2), il passo 3 al framework
 di enforcement descritto in questa sezione e al binding del caso di
 studio (sezione 4.6), il passo 4 all'avvio containerizzato (sezione
-3.2.1). L'evoluzione dei modelli a runtime (passo 5) resta fuori dagli
+3.2). L'evoluzione dei modelli a runtime (passo 5) resta fuori dagli
 obiettivi di questa tesi. Come in \[29\], il framework è realizzato in
 Python e interagisce con AsmetaS@run.time tramite la sua API REST,
 caricando i modelli all'avvio ed eseguendone un passo per ogni
@@ -1489,6 +1444,9 @@ distinte:]{.mark}
 
 [└── README.md]{.mark}
 
+[\
+Listato 2: Alberatura del progetto.]{.mark}
+
 []{.mark}
 
 [Tutto ciò che il motore deve sapere su un dominio è racchiuso nella
@@ -1544,7 +1502,7 @@ principi guida fondamentali:]{.mark}
   regole cablate o assunzioni rigide legate a uno specifico scenario. I
   tool vengono scoperti tramite MCP, le azioni ammesse e i loro
   parametri sono definiti dal binding del caso di studio e le regole di
-  sicurezza risiedono nei modelli ASM caricati sul server.]{.mark}
+  sicurezza risiedono nei modelli ASM caricati sul servers.]{.mark}
 
 - [Rigore algoritmico e riproducibilità: A parità di proposta d\'azione
   e di risposta del server, il Formal Gate produce sempre il medesimo
@@ -1571,8 +1529,6 @@ Planner:]{.mark}
   un\'alterazione dello stato del sistema deve passare per l\'unico tool
   attuativo, submit_plan, e viene sottoposta al ciclo di verifica
   formale via MCP. Qualsiasi altro tool viene bloccato.]{.mark}
-
-[]{.mark}
 
 [A differenza di un riconoscimento basato sul nome del tool (ad esempio
 su prefissi come get\_ o suffissi come \_status), che un tool con un
@@ -1627,8 +1583,7 @@ illustrato in Figura 6.[]{.mark}
 
 []{.mark}
 
-[Figura 6:]{.mark} Diagramma di workflow[. Realizzato con
-[draw.io](https://app.diagrams.net).]{.mark}
+Figura 6: DIagramma di workflow.
 
 []{.mark}
 
@@ -1682,11 +1637,15 @@ controfattuale, detta preview, su un gemello del sistema:]{.mark}
 
 - [Simulazione del piano: sul gemello vengono eseguite la correzione e,
   in sequenza, le azioni residue del piano. Dopo ogni passo, un modello
-  ASM coordinatore ispeziona lo stato simulato e registra eventuali
-  violazioni; al termine, considerando anche gli obiettivi dell\'utente,
-  restituisce l\'esito COMPATIBLE, CONFLICT o UNKNOWN. Una violazione
-  rilevata in uno stato intermedio resta registrata anche se lo stato
-  finale è sicuro.]{.mark}
+  ASM coordinatore confronta lo stato simulato con i vincoli di
+  sicurezza e con gli obiettivi dell\'utente rappresentati
+  esplicitamente nei modelli (nel caso di studio, available_from e
+  latest_time) e registra eventuali violazioni. Al termine restituisce
+  COMPATIBLE se tutte le azioni simulate sono state eseguite e i vincoli
+  sono rispettati, CONFLICT se un vincolo modellato viene violato,
+  UNKNOWN se le evidenze disponibili non bastano per decidere. Una
+  violazione rilevata in uno stato intermedio resta registrata anche se
+  lo stato finale è sicuro.]{.mark}
 
 - [Decisione: l\'esito della preview viene passato all\'enforcer, che
   emette il comando solo con esito COMPATIBLE; altrimenti la decisione è
@@ -1705,24 +1664,12 @@ concordare: ogni discrepanza è trattata come errore operativo.]{.mark}
 
 ## 5.6 Politiche di coordinamento e protocollo PGA
 
-[Quando l\'enforcer trova una correzione locale per un\'azione non
-ammissibile, il framework deve decidere come coordinare la correzione
-con il resto del piano dell\'agente. Si possono individuare tre
-politiche, che condividono le stesse regole di sicurezza e lo stesso
-framework di esecuzione e differiscono solo nella risposta a un\'azione
-localmente non sicura:]{.mark}
-
-- [Always-Replan (AR): rifiuta l\'azione e chiede un nuovo piano, senza
-  applicare la correzione]{.mark};[]{.mark}
-
-- [Local-First (LF): applica subito la correzione senza considerare le
-  azioni successive, se queste vengono bloccate, ripianifica in
-  seguito;]{.mark}
-
-- [Preview-Based Goal-Aware (PGA): simula la correzione e il piano
-  residuo su un gemello isolato del sistema e applica la correzione solo
-  se la simulazione è compatibile, altrimenti richiede un nuovo
-  piano.]{.mark}
+[Le sezioni precedenti descrivono i meccanismi con cui il framework
+realizza la politica Preview-Based Goal-Aware (PGA), introdotta nella
+sezione 3.1 insieme alle alternative Always-Replan (AR) e Local-First
+(LF). Questa sezione ne confronta il comportamento sugli scenari e
+definisce le garanzie del protocollo e la divisione dei compiti tra
+modelli ASM e framework.]{.mark}
 
 [Applicate agli scenari del capitolo 6, le tre politiche si comportano
 in modo diverso. Nello scenario M1, AR chiede un nuovo piano anche se la
@@ -1731,24 +1678,7 @@ applica dopo la preview, pagando il costo della simulazione. Nello
 scenario M2, AR ripianifica prima di qualsiasi modifica, LF applica la
 prima correzione e può dover rimediare in seguito a un sistema già
 modificato, mentre PGA rileva il conflitto in anticipo e chiede un nuovo
-piano senza aver toccato il sistema. Il framework realizzato adotta la
-politica PGA, descritta nelle sezioni precedenti; l\'ipotesi alla base è
-che subordinare il commit di una correzione al suo effetto sul piano
-residuo eviti modifiche premature senza dover sempre ricorrere alla
-ripianificazione dell\'LLM.]{.mark}
-
-[Il protocollo PGA si articola in tre passi. Quando l\'enforcer giudica
-non ammissibile un\'azione del piano e prescrive una correzione locale,
-il framework simula la correzione seguita dalle azioni residue del piano
-su un gemello isolato del sistema, ottenuto rigiocando la storia degli
-input del sistema live (sezione 5.5). Dopo ogni azione simulata, lo
-stato del gemello viene confrontato con i vincoli di sicurezza e con i
-vincoli sugli obiettivi dell\'utente rappresentati esplicitamente nei
-modelli (nel caso di studio, available_from e latest_time). La preview
-restituisce uno di tre esiti: COMPATIBLE se tutte le azioni simulate
-sono state eseguite e i vincoli sono rispettati, CONFLICT se un vincolo
-modellato viene violato, UNKNOWN se le evidenze disponibili non bastano
-per decidere.]{.mark}
+piano senza aver toccato il sistema.]{.mark}
 
 [La correzione viene applicata al sistema live solo se la preview è
 COMPATIBLE e lo stato live non è cambiato nel frattempo; in caso
@@ -2047,7 +1977,10 @@ repository del progetto e consultati nelle wiki dello stesso
 > [Il sistema di sicurezza ha modificato la richiesta e ha spostato la
 > dose delle 12:10 del Sumatriptan alle 17:00 anziché alle
 > 17:30.]{.mark}
->
+
+[\
+Listato 3: Conversazione, scenario M1.]{.mark}
+
 > []{.mark}
 
 []{.mark}
@@ -2169,6 +2102,92 @@ quantitativo.]{.mark}
   framework di enforcement e casi di studio (sezione 4.6), il pattern
   può essere applicato ad altri domini safety-critical aggiungendo
   soltanto modelli ASM, binding e server MCP.]{.mark}
+
+[\
+]{.mark}
+
+# [Appendice A - Prompt del Planner]{.mark}
+
+### [Prompt generico (planner_prompt.md)]{.mark}
+
+[You are an operations assistant for a critical system. Every action you
+propose is checked by a formal enforcer (the Formal Gate) before it
+reaches the system.]{.mark}
+
+[]{.mark}
+
+[\### RULES:]{.mark}
+
+[1. Act only through the available tools, following their schemas. If a
+request cannot be expressed with them, say it is not supported: never
+substitute an action with a different effect.]{.mark}
+
+[2. Before acting, read the state with a read-only tool: earlier
+readings may be stale.]{.mark}
+
+[3. Make at most one tool call per response. Put ALL the requested
+actions, in order, in a single \`submit_plan\`: the gate tells you which
+ones remain. Never drop actions or ask again for data the user already
+gave.]{.mark}
+
+[4. Each result starts with the Formal Gate verdict, the only source for
+describing it:]{.mark}
+
+[- \`ALLOW\`: executed as proposed. Do not claim the gate intervened,
+even if the state looks unfavorable to you.]{.mark}
+
+[- \`REPLACE\`: a safe action was executed instead. Say so, and never
+claim the original succeeded.]{.mark}
+
+[- \`REPLAN\`: nothing changed. Propose an alternative or explain why
+the request cannot be fulfilled.]{.mark}
+
+[- \`BLOCK\`: nothing changed and no further actions are possible this
+turn. Explain why.]{.mark}
+
+[Never infer verdicts the result does not report, and never write these
+markers yourself.]{.mark}
+
+[5. Explain a \`reason\` only through its \`reason_explanation\`, in
+your own words: never quote it, and never show verdict names or reason
+codes to the user. Do not add causes or details it does not state. Never
+invent limits or rules.]{.mark}
+
+[6. Do not repeat an action already executed in this turn. Report the
+real outcomes, even if the system was already in the requested
+state.]{.mark}
+
+[]{.mark}
+
+[Reply in the user\'s language, concisely and professionally.]{.mark}
+
+### [Istruzioni di dominio (planner_hints.md)]{.mark}
+
+[- The system is a pillbox with several compartments (synthetic data).
+\`get_system_state\` returns \`medication\`, which says which medication
+each compartment holds.]{.mark}
+
+[- The user only knows medication names and knows nothing about
+compartments and indexes. You translate the medication into the
+compartment using \`medication\`, and \"first dose\" / \"second dose\"
+into the index (the first is index 0). In your answers always talk about
+medications, doses and times in HH:MM format: never mention compartment
+names, indexes or times in minutes.]{.mark}
+
+[- In the tools, times are minutes from midnight (0-1439): for example
+17:30 = 1050, 19:00 = 1140. Dose indexes start at 0.]{.mark}
+
+[- Never convert minutes to times yourself: to tell the user the current
+times, copy them from \`schedule_hhmm\`, which you find in
+\`get_system_state\` and in the \`system_state\` of the \`submit_plan\`
+result. Likewise, the current time of the pillbox is
+\`system_time_hhmm\` (\`system_time\` in minutes).]{.mark}
+
+[]{.mark}
+
+# [Appendice B - Conversazioni degli scenari]{.mark}
+
+[]{.mark}
 
 # Bibliografia
 
