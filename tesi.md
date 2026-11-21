@@ -461,6 +461,45 @@ conversano e agiscono per risolvere task complessi, supportando
 nativamente l\'esecuzione di codice e cicli di feedback strutturati
 \[4\].
 
+[In LangGraph un\'applicazione è descritta come un grafo orientato,
+costruito con la classe StateGraph \[15\] a partire da tre
+elementi:]{.mark}
+
+- [Stato: una struttura dati tipizzata, condivisa da tutti i nodi, che
+  raccoglie le informazioni disponibili durante l\'esecuzione.]{.mark}
+
+- [Nodi: funzioni che ricevono lo stato corrente e restituiscono
+  soltanto i campi da aggiornare, non uno stato completo. LangGraph
+  fonde l\'aggiornamento nello stato: per default il nuovo valore di un
+  campo sostituisce il precedente, ma al campo si può associare una
+  funzione di riduzione (reducer) che stabilisce come combinare i due
+  valori. Il reducer add_messages, per esempio, accoda i nuovi messaggi
+  alla conversazione invece di sostituirla.]{.mark}
+
+- [Archi: stabiliscono quale nodo viene eseguito dopo un altro. Un arco
+  semplice collega sempre gli stessi due nodi, mentre un arco
+  condizionale invoca una funzione di instradamento (router) che, in
+  base allo stato, restituisce il nome del nodo successivo. I due nodi
+  speciali START ed END indicano l\'ingresso e la fine
+  dell\'esecuzione.]{.mark}
+
+[Una volta definito, il grafo viene compilato in un oggetto eseguibile.
+A ogni invocazione l\'esecuzione parte da START, procede di nodo in nodo
+applicando gli aggiornamenti allo stato e termina quando un arco conduce
+a END. Poiché gli archi possono formare cicli, il grafo può rappresentare
+direttamente il ciclo ragionamento-azione-osservazione del paradigma
+ReAct. Al grafo compilato si può infine associare un checkpointer, che
+salva lo stato durante l\'esecuzione sotto un identificativo di
+conversazione (thread_id): un\'invocazione successiva con lo stesso
+identificativo riparte dallo stato salvato, e la memoria si conserva
+così tra un messaggio e l\'altro.]{.mark}
+
+[Oltre a queste primitive, l\'ecosistema offre un agente ReAct già
+pronto (create_agent di LangChain, che nelle versioni più recenti
+sostituisce create_react_agent di LangGraph), che alterna un nodo che
+interroga il modello e un nodo (ToolNode) che esegue le chiamate a tool
+richieste dal modello stesso.]{.mark}
+
 ## 2.3 Protocolli di interconnessione: MCP e A2A
 
 Il panorama dei framework agentici presenta principalmente due
@@ -920,10 +959,35 @@ azioni, che vengono comunque verificate.]{.mark}
 ## [4.2 Anatomia dei nodi LangGraph]{.mark}
 
 [L\'applicazione modella il ciclo decisionale tramite uno StateGraph di
-LangGraph, ovvero un tipo di grafo nel quale i nodi comunicano leggendo
-e scrivendo uno stato comune \[15\], nel nostro caso chiamato
-AgentState. I componenti del sistema e le loro relazioni sono illustrati
-nel diagramma dei componenti in Figura 5.]{.mark}
+LangGraph (sezione 2.2), il cui stato condiviso è chiamato AgentState.
+Il grafo, illustrato in Figura 5, contiene due nodi, il PlannerNode e il
+FormalGateNode, collegati da archi condizionali. Ogni messaggio
+dell\'utente avvia un\'esecuzione del grafo che parte dal Planner, passa
+al Formal Gate ogni volta che l\'LLM richiede un tool e torna al Planner
+dopo ogni verdetto. L\'esecuzione termina (END) quando il Planner
+risponde con un testo, oppure quando il gate segnala un errore
+operativo.]{.mark}
+
+[]{.mark}
+
+Figura 5: Grafo LangGraph dell\'agente.
+
+[Il grafo non riusa l\'agente ReAct predefinito descritto nella sezione
+2.2. In quell\'agente il ToolNode esegue direttamente ogni chiamata a
+tool prodotta dal modello, per cui la sicurezza delle azioni dipenderebbe
+dal prompt e dalle descrizioni dei tool, che l\'LLM può ignorare o
+fraintendere. Il grafo è stato quindi costruito esplicitamente, e al
+posto del ToolNode c\'è il FormalGateNode, una funzione deterministica
+che non usa alcun LLM. Nel grafo non esiste un percorso che porti una
+richiesta del Planner all\'ambiente senza attraversare il gate, e il
+nodo successivo è sempre scelto da funzioni di instradamento scritte in
+Python, che leggono lo stato, e mai dal modello. Qualunque cosa l\'LLM
+generi, la sua richiesta può soltanto raggiungere il gate oppure
+terminare il turno. Il comportamento fail-closed è quindi una proprietà
+della struttura del grafo, non del comportamento del modello.]{.mark}
+
+[I componenti del sistema e le loro relazioni sono illustrati nel
+diagramma dei componenti in Figura 6.]{.mark}
 
 ### [PlannerNode]{.mark} e prompt di sistema
 
@@ -1133,7 +1197,7 @@ nuovo messaggio dell\'utente.]{.mark}
 
 []{.mark}
 
-Figura 5: Diagramma dei componenti principali.
+Figura 6: Diagramma dei componenti principali.
 
 ## **4.3 Protocolli e livelli di comunicazione[]{.mark}**
 
@@ -1740,13 +1804,13 @@ bloccarla.]{.mark}
 
 []{.mark}Il ciclo di esecuzione del Formal Gate e l\'instradamento
 condizionale delle decisioni sono sintetizzati nel diagramma di workflow
-illustrato in Figura 6.[]{.mark}
+illustrato in Figura 7.[]{.mark}
 
 []{.mark}
 
 []{.mark}
 
-Figura 6: DIagramma di workflow.
+Figura 7: Diagramma di workflow.
 
 []{.mark}
 
