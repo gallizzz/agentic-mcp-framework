@@ -1235,10 +1235,10 @@ progetto (sezione 4.6) è il seguente:]{.mark}
                                              gemello insieme al resto del  
                                              piano]{.mark}                 
 
-  [6]{.mark}       [Runtime ASM]{.mark}      [Se la decisione lo consente, [enforcement/asm_runtime.py]{.mark}
+  [6]{.mark}       [Gateway]{.mark}          [Se la decisione lo consente, [enforcement/gateway.py]{.mark}
                                              applica il comando al sistema 
-                                             live e attende la conferma    
-                                             (ACK)]{.mark}                 
+                                             live e ne verifica la         
+                                             conferma (ACK)]{.mark}        
 
   [7]{.mark}       [PlannerNode]{.mark}      [Riceve la decisione (ALLOW,  [core/planner_node.py]{.mark}
                                              REPLACE, REPLAN o BLOCK) e    
@@ -1247,6 +1247,13 @@ progetto (sezione 4.6) è il seguente:]{.mark}
   -----------------------------------------------------------------------------------------------------------------------
 
   : Tabella 1: Ciclo di esecuzione di una richiesta di modifica.
+
+[I passi 4, 5 e 6 non comunicano direttamente con AsmetaS: ogni
+avanzamento di un modello ASM (enforcer, gemello, coordinatore, sistema
+live) passa per il modulo asm_runtime, che registra la storia degli
+input di ogni sessione, ricostruisce il gemello per la preview e
+inoltra i passi al web service tramite rest_client (sezione
+4.5).]{.mark}
 
 [\
 La sola presenza di interfacce JSON-RPC via MCP non garantisce che i
@@ -1311,43 +1318,125 @@ decisioni di sicurezza: Python avvia le sessioni, esegue i passi, passa
 gli output di un modello come input di un altro e verifica la
 correlazione tra richiesta, simulazione, comando e conferma.]{.mark}
 
-[I moduli principali sono:]{.mark}
+[Il framework gestisce quattro ruoli di sessione ASM, i cui modelli sono
+indicati dal binding del caso di studio: il sistema live, cioè il
+modello del sistema che l\'agente modifica davvero; l\'enforcer, che
+prende ogni decisione; il coordinatore, che giudica un piano simulato
+durante la preview; eventuali modelli ausiliari, mantenuti allineati
+allo stato live dopo ogni comando applicato. Le sessioni del sistema
+live, dell\'enforcer e dei modelli ausiliari durano quanto il server
+MCP; il gemello e il coordinatore vengono creati per una singola preview
+e chiusi al suo termine.]{.mark}
 
-- [rest_client: client REST verso AsmetaS-web-service, in grado di
-  gestire più sessioni contemporanee; chiude solo le sessioni che ha
-  aperto e non ripete mai automaticamente le scritture;]{.mark}
+[I moduli sono organizzati a livelli: ognuno usa solo quelli sottostanti
+e solo il livello più alto è visibile all\'agente. Dal basso verso
+l\'alto:]{.mark}
 
-- [asm_runtime: ciclo di vita delle sessioni e ricostruzione del gemello
-  del sistema, rigiocando la storia degli input del modello
-  live;]{.mark}
+- [contracts: definisce i dati scambiati tra i moduli e il contratto con
+  il Formal Gate, ed è l\'unico modulo del framework importato da core.
+  Contiene i nomi dei tool MCP, l\'insieme delle decisioni finali
+  ammesse (ALLOW, REPLACE, REPLAN, BLOCK), i modelli Pydantic del piano
+  (Listato 1), gli oggetti che descrivono l\'uscita dell\'enforcer, il
+  comando autorizzato, la richiesta e l\'esito della preview, e due
+  interfacce: AsmService, le quattro operazioni richieste al runtime
+  (avvio, passo, lettura e chiusura di una sessione), e ModelBinding.
+  Definisce infine l\'eccezione AsmError, che rappresenta un errore
+  operativo (servizio non raggiungibile, risposta incoerente,
+  correlazione errata) e mai un verdetto di sicurezza;]{.mark}
 
-- [preview_orchestrator: simulazione della correzione e delle azioni
-  residue del piano sul gemello, con invocazione del modello
-  coordinatore dopo ogni passo, cioè la parte di orchestrazione del
-  protocollo PGA (sezione 5.6);]{.mark}
+- [rest_client: implementa AsmService sulle API REST di
+  AsmetaS-web-service. Controlla ogni risposta (identificativo della
+  sessione, nome del modello, esito del passo, tipo di ogni valore) e la
+  converte in uno stato tipizzato. Poiché un timeout può seguire un
+  passo che il server ha già eseguito, non ripete mai una scrittura e,
+  dopo il primo errore, rifiuta ogni chiamata tranne la chiusura delle
+  sessioni. Tiene traccia delle sessioni che ha aperto e chiude solo
+  quelle, senza toccare le sessioni di altri utenti del servizio;]{.mark}
 
-- [gateway: flusso completo di una richiesta (enforcer, simulazione,
-  commit sul sistema live, conferma);]{.mark}
+- [asm_runtime: gestisce il ciclo di vita delle sessioni. Per ogni
+  sessione registra la storia degli input inviati e l\'ultimo stato
+  letto. Apre solo sessioni di modelli presenti nella cartella
+  configurata e rifiuta di farlo se i file .asm locali sono cambiati
+  dopo l\'avvio, confrontandone un\'impronta calcolata all\'inizio.
+  Fornisce le due operazioni su cui si basa la preview: la fotografia
+  del sistema live (storia degli input e stato corrente) e la
+  ricostruzione del gemello a partire da essa, con un limite massimo di
+  passi e la verifica che lo stato ricostruito coincida con quello
+  reale (sezione 5.5);]{.mark}
 
-- [deploy: caricamento dei modelli sul web service;]{.mark}
+- [deploy: carica sul web service i modelli e le librerie elencati nella
+  configurazione del caso di studio ed è l\'unico punto in cui i file
+  .asm escono da resources. Se il servizio non ha sessioni attive carica
+  tutti i file, sostituendo quelli omonimi; altrimenti carica solo
+  quelli mancanti, per non sostituire modelli eventualmente in uso, e
+  segnala nel log quelli mantenuti. Al termine verifica che il servizio
+  conservi tutti i file richiesti, altrimenti l\'avvio fallisce;]{.mark}
 
-- [mcp_facade: esposizione dei tool MCP get_system_state,
-  get_plan_status e submit_plan;]{.mark}
+- [preview_orchestrator: esegue una preview. Ricostruisce il gemello,
+  apre una nuova sessione del coordinatore e lo fa avanzare in tre fasi:
+  apertura, con lo stato iniziale del gemello e la richiesta;
+  ispezione, dopo ogni azione simulata, prima la correzione e poi le
+  azioni residue del piano; chiusura, con gli obiettivi
+  dell\'utente. Il coordinatore può concludere già all\'apertura, per
+  esempio se la richiesta non è valida. Per ogni passo il modulo
+  raccoglie un\'osservazione (azione, stato simulato, stato del
+  coordinatore), allegata al risultato come evidenza. Verifica che
+  l\'esito si riferisca alla stessa richiesta e alla stessa versione
+  dello stato e chiude sempre gemello e coordinatore, anche in caso di
+  errore. Non decide la compatibilità: la legge dal coordinatore. È la
+  parte di orchestrazione del protocollo PGA (sezione 5.6);]{.mark}
 
-- [contracts: tipi condivisi, contratto con il Formal Gate e interfaccia
-  ModelBinding;]{.mark}
+- [gateway: è il servizio applicativo al centro del framework. Possiede
+  le sessioni di lunga durata e, all\'avvio, le apre ed esegue il primo
+  passo di ciascuna: se AsmetaS non risponde o un modello non si avvia,
+  il server MCP termina. Per ogni piano valida schema e binding, assegna
+  un identificativo di correlazione che deve tornare invariato
+  nell\'uscita dell\'enforcer, nella richiesta di preview, nel comando e
+  nella conferma, interroga l\'enforcer, fa eseguire la preview quando
+  richiesta, invia il comando al sistema live con i controlli descritti
+  nella sezione 5.5 e confronta la decisione finale con la conferma. I
+  piani sono serializzati, così due piani non possono intrecciarsi sul
+  sistema live. Un registro indicizzato per request_id rende
+  l\'invio idempotente e alimenta get_plan_status: lo stesso
+  identificativo con un contenuto diverso viene rifiutato. Qualsiasi
+  errore successivo alla validazione produce lo stato
+  recovery_required, con l\'esito del comando (applicato, non applicato
+  o sconosciuto, se il comando è partito senza conferma), e da quel
+  momento il gateway rifiuta ogni scrittura;]{.mark}
 
-- [bootstrap: punti di ingresso generici del caso di studio, cioè
-  l\'avvio del server MCP e l\'esecutore di scenari senza LLM.]{.mark}
+- [mcp_facade: strato sottile senza passi ASM né regole di dominio.
+  Registra tre tool: get_system_state e get_plan_status, annotati come
+  di sola lettura, e submit_plan, l\'unico che modifica il sistema. La
+  descrizione di submit_plan unisce un testo generico sui campi comuni
+  del piano e la descrizione delle azioni fornita dal binding. Converte
+  le eccezioni nello stato della risposta: invalid_request per un piano
+  rifiutato da schema o binding, recovery_required per un errore
+  operativo. Espone solo il trasporto stdio, quindi il web service non è
+  mai raggiungibile dall\'agente;]{.mark}
+
+- [bootstrap: punti di ingresso generici, chiamati dai file del caso di
+  studio con il proprio binding e la propria configurazione. Il primo
+  avvia il server MCP: legge l\'indirizzo di AsmetaS dalla variabile
+  ASMETAS_URL, carica i modelli, costruisce runtime, binding e gateway,
+  inizializza il gateway e solo allora inizia a servire MCP; qualunque
+  errore precedente termina il processo con codice 1 (fail-fast). I log
+  vanno sullo standard error, perché lo standard output è il canale MCP,
+  e all\'uscita regolare tutte le sessioni vengono chiuse. Il secondo è
+  l\'esecutore di scenari: esegue un piano JSON su una nuova sessione
+  live senza LLM, ed è usato per gli esperimenti del capitolo
+  6.]{.mark}
 
 [Il confine con il dominio è l\'interfaccia ModelBinding, implementata
-da ogni caso di studio. Il binding traduce richieste, comandi e
-osservazioni da e verso le funzioni di input e output dei modelli ASM,
-senza decidere nulla sulla sicurezza. Fornisce inoltre la descrizione,
-destinata all\'LLM, delle azioni ammesse e dei loro parametri, che il
-server aggiunge alla descrizione di submit_plan, e un glossario dei
-codici di motivo restituiti dall\'enforcer, che il server allega al
-risultato come spiegazione in linguaggio naturale.]{.mark}
+da ogni caso di studio. Il binding nomina i modelli dei quattro ruoli,
+costruisce gli input di ogni passo a partire dal piano o dallo stato
+live e decodifica gli output dei modelli negli oggetti definiti in
+contracts, senza decidere nulla sulla sicurezza: si limita a controlli
+di rappresentazione, come tipi di azione noti e parametri nei limiti.
+Fornisce inoltre la descrizione, destinata all\'LLM, delle azioni ammesse
+e dei loro parametri, che il server aggiunge alla descrizione di
+submit_plan, e un glossario dei codici di motivo restituiti
+dall\'enforcer, che il server allega al risultato come spiegazione in
+linguaggio naturale.]{.mark}
 
 ## 4.6 Separazione tra motore generico e casi di studio[]{.mark}
 
@@ -1383,27 +1472,27 @@ distinte:]{.mark}
 
 [│ ├── formal_gate_node.py \# FormalGateNode]{.mark}
 
-[│ ├── config.py]{.mark}
+[│ ├── config.py \# UseCaseConfig e selezione del caso di studio]{.mark}
 
 [│ └── cli_formatter.py \# interfaccia a riga di comando]{.mark}
 
 [├── enforcement/ \# framework di enforcement (sez. 4.5)]{.mark}
 
-[│ ├── gateway.py]{.mark}
+[│ ├── contracts.py \# tipi condivisi, contratto con il core, ModelBinding]{.mark}
 
-[│ ├── preview_orchestrator.py]{.mark}
+[│ ├── rest_client.py \# client REST verso AsmetaS-web-service]{.mark}
 
-[│ ├── asm_runtime.py]{.mark}
+[│ ├── asm_runtime.py \# sessioni ASM e ricostruzione del gemello]{.mark}
 
-[│ ├── rest_client.py]{.mark}
+[│ ├── deploy.py \# caricamento dei modelli all\'avvio]{.mark}
 
-[│ ├── mcp_facade.py]{.mark}
+[│ ├── preview_orchestrator.py \# simulazione del piano sul gemello]{.mark}
 
-[│ ├── contracts.py]{.mark}
+[│ ├── gateway.py \# richiesta, enforcer, preview, commit, ACK]{.mark}
 
-[│ ├── bootstrap.py]{.mark}
+[│ ├── mcp_facade.py \# tool MCP esposti all\'agente]{.mark}
 
-[│ └── deploy.py]{.mark}
+[│ └── bootstrap.py \# avvio del server MCP ed esecutore di scenari]{.mark}
 
 [├── use_cases/]{.mark}
 
@@ -1431,15 +1520,15 @@ distinte:]{.mark}
 
 [│ └── models/]{.mark}
 
-[│ ├── scheduler.asm]{.mark}
+[│ ├── scheduler.asm \# enforcer]{.mark}
 
-[│ ├── PreviewCoordinator.asm]{.mark}
+[│ ├── PreviewCoordinator.asm \# coordinatore della preview]{.mark}
 
-[│ ├── pillboxDevice.asm]{.mark}
+[│ ├── pillboxDevice.asm \# sistema live (e gemello)]{.mark}
 
-[│ ├── configurationMgr.asm]{.mark}
+[│ ├── configurationMgr.asm \# gestore della configurazione]{.mark}
 
-[│ └── knowledge.asm]{.mark}
+[│ └── knowledge.asm \# dati di dominio, importato dagli altri]{.mark}
 
 [├── Dockerfile]{.mark}
 
@@ -1462,13 +1551,6 @@ predefinito. Per collegare un nuovo dominio è sufficiente aggiungere i
 modelli in resources e creare una cartella in use_cases con il binding,
 la configurazione di enforcement e il server MCP, senza modificare core
 né enforcement.]{.mark}
-
-[All\'avvio il server MCP carica sul web service i modelli elencati
-nella configurazione del caso di studio. Se il servizio non ha sessioni
-attive carica tutti i file, sostituendo quelli omonimi; altrimenti
-carica solo quelli mancanti, per non sostituire modelli eventualmente in
-uso. Al termine verifica che il servizio conservi tutti i file
-richiesti, altrimenti l\'avvio fallisce.]{.mark}
 
 ## [4.7 Dipendenze esterne]{.mark}
 
